@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Service - BRYX</title>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <header class="simple-header">
+    <h1>Service</h1>
+
+    <nav id="roleNav"></nav>
+  </header>
+
+  <div id="currentUserBar"></div>
+
+  <main class="service-page">
+
+    <section class="split-workspace">
+      <section class="left-board">
+        <section id="serviceGrid" class="service-grid empty-grid"></section>
+      </section>
+
+      <aside id="invoiceDetailPanel" class="invoice-detail-panel">
+        <div class="detail-empty">
+          <strong>Sélectionne une facture</strong>
+          <span>Le détail complet s’affichera ici.</span>
+        </div>
+      </aside>
+    </section>
+
+  </main>
+
+  <div id="serverContextMenu" class="context-menu">
+    <button onclick="contextAddFloatingInvoice()">Nouvelle facture volante</button>
+    <button onclick="contextAddTable()">Ouvrir nouvelle table</button>
+  </div>
+
+  <div id="confirmOverlay" class="modal-overlay">
+    <div class="modal-box">
+      <h2 id="confirmTitle">Confirmer</h2>
+      <p id="confirmText">Action à confirmer.</p>
+
+      <div class="modal-actions">
+        <button class="secondary" onclick="closeConfirmModal()">Annuler</button>
+        <button class="danger" id="confirmButton">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="permissions.js"></script>
+  <script src="script.js"></script>
+  <script>
+    requireRole(["SERVER", "CAISSE", "MANAGER", "ADMIN"]);
+    injectRoleNav();
+    injectCurrentUserBar();
+    renderServicePage();
+  </script>
+
+</body>
+
+</html>

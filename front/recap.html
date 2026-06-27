@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Récap - BRYX</title>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <header class="simple-header">
+    <h1>Récap</h1>
+
+    <nav>
+      <a href="service.html">Service</a>
+      <a href="recap.html">Récap</a>
+    </nav>
+  </header>
+  <div id="currentUserBar"></div>
+  <main class="recap-page">
+
+    <section class="summary">
+      <div class="summary-card">
+        <span>Total journée</span>
+        <strong id="dayTotal">0.00 €</strong>
+      </div>
+
+      <div class="summary-card">
+        <span>Tables</span>
+        <strong id="tableCount">0</strong>
+      </div>
+
+      <div class="summary-card">
+        <span>Factures</span>
+        <strong id="invoiceCount">0</strong>
+      </div>
+
+      <div class="summary-card">
+        <span>Ticket moyen</span>
+        <strong id="averageTicket">0.00 €</strong>
+      </div>
+    </section>
+
+    <section class="recap-payment-grid">
+      <div class="recap-payment-card">
+        <span>Payé carte</span>
+        <strong id="cardPaidTotal">0.00 €</strong>
+      </div>
+
+      <div class="recap-payment-card">
+        <span>Payé espèces</span>
+        <strong id="cashPaidTotal">0.00 €</strong>
+      </div>
+
+      <div class="recap-payment-card">
+        <span>Total payé</span>
+        <strong id="paidTotal">0.00 €</strong>
+      </div>
+
+      <div class="recap-payment-card">
+        <span>Reste à régler</span>
+        <strong id="remainingTotal">0.00 €</strong>
+      </div>
+    </section>
+
+    <section class="recap-section">
+      <h2>Résumé par serveur</h2>
+      <div id="serverSummary" class="server-summary"></div>
+    </section>
+
+    <section class="recap-section">
+      <h2>Détail des tables</h2>
+      <div id="tableRecap" class="table-recap-list"></div>
+    </section>
+
+    <section class="recap-section print-detail-section">
+      <h2>Détail par serveur pour PDF</h2>
+      <div id="serverDetailPdf" class="server-detail-pdf"></div>
+    </section>
+
+    <section class="recap-section">
+      <h2>Factures volantes</h2>
+      <div id="floatingRecap" class="floating-recap-list"></div>
+    </section>
+
+    <section class="recap-actions">
+      <button onclick="window.print()">Imprimer / PDF</button>
+      <button class="secondary" onclick="copyRecapMessage()">Copier récap</button>
+      <button class="secondary" onclick="shareRecapOnWhatsApp()">Envoyer texte WhatsApp</button>
+      <button class="secondary" onclick="downloadRecapPdf()">Télécharger PDF</button>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="config.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="auth.js"></script>
+  <script src="script.js"></script>
+  <script>
+    requireRole(["CAISSE", "MANAGER", "ADMIN"]);
+    injectRoleNav();
+    injectCurrentUserBar();
+    renderRecapPage();
+  </script>
+
+</body>
+
+</html>

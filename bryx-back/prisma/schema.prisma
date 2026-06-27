@@ -1,0 +1,322 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/**
+ * ROLES UTILISATEUR
+ * ADMIN   = plein pouvoir
+ * MANAGER = gestion service + réductions + déplacements
+ * CAISSE  = encaissement + validation paiement + récap
+ * SERVER  = prise de commande
+ */
+
+model User {
+  id      Int     @id @default(autoincrement())
+  name    String
+  pin     String?
+  role    String  @default("SERVER")
+  active  Boolean @default(true)
+  blocked Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  responsibleTables Table[] @relation("ResponsibleTables")
+  createdTables     Table[] @relation("CreatedTables")
+
+  responsibleInvoices Invoice[] @relation("ResponsibleInvoices")
+  createdInvoices     Invoice[] @relation("CreatedInvoices")
+  validatedInvoices   Invoice[] @relation("ValidatedInvoices")
+  discountInvoices    Invoice[] @relation("DiscountInvoices")
+  deferredInvoices    Invoice[] @relation("DeferredInvoices")
+
+  addedItems   Item[] @relation("AddedItems")
+  updatedItems Item[] @relation("UpdatedItems")
+
+  payments     Payment[]     @relation("PaymentReceivedBy")
+  activityLogs ActivityLog[] @relation("ActorLogs")
+}
+
+/**
+ * TABLE RESTAURANT
+ * Une table a un serveur responsable.
+ * Mais tous les serveurs peuvent voir le service.
+ * Les actions sont tracées dans ActivityLog.
+ */
+
+model Table {
+  id     Int    @id @default(autoincrement())
+  name   String
+  status String @default("ACTIVE")
+  // ACTIVE, CLOSED, CANCELLED
+
+  responsibleUserId Int?
+  createdByUserId   Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  responsibleUser User? @relation("ResponsibleTables", fields: [responsibleUserId], references: [id])
+  createdByUser   User? @relation("CreatedTables", fields: [createdByUserId], references: [id])
+
+  invoices     Invoice[]
+  activityLogs ActivityLog[]
+
+  @@index([responsibleUserId])
+  @@index([status])
+}
+
+/**
+ * FACTURE
+ * Une facture peut être :
+ * - sur une table
+ * - volante
+ * - payée
+ * - paiement demandé
+ * - paiement différé / ardoise client
+ */
+
+model Invoice {
+  id Int @id @default(autoincrement())
+
+  name   String?
+  status String  @default("OPEN")
+  // OPEN
+  // PAYMENT_REQUESTED
+  // READY_TO_VALIDATE
+  // PAID
+  // DEFERRED_PAYMENT
+  // CANCELLED
+
+  tableId           Int?
+  responsibleUserId Int?
+  createdByUserId   Int?
+
+  // Paiement rapide
+  cashPaid Float @default(0)
+  cardPaid Float @default(0)
+
+  paymentRequested   Boolean   @default(false)
+  paymentRequestedAt DateTime?
+
+  paymentValidated  Boolean   @default(false)
+  validatedByUserId Int?
+  validatedAt       DateTime?
+
+  // Réduction / geste commercial
+  discountAmount   Float   @default(0)
+  discountPercent  Float   @default(0)
+  discountReason   String?
+  discountByUserId Int?
+
+  // Client habitué / paiement plus tard
+  customerId       Int?
+  deferredPayment  Boolean @default(false)
+  deferredReason   String?
+  deferredByUserId Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  table           Table?    @relation(fields: [tableId], references: [id])
+  responsibleUser User?     @relation("ResponsibleInvoices", fields: [responsibleUserId], references: [id])
+  createdByUser   User?     @relation("CreatedInvoices", fields: [createdByUserId], references: [id])
+  validatedByUser User?     @relation("ValidatedInvoices", fields: [validatedByUserId], references: [id])
+  discountBy      User?     @relation("DiscountInvoices", fields: [discountByUserId], references: [id])
+  deferredBy      User?     @relation("DeferredInvoices", fields: [deferredByUserId], references: [id])
+  customer        Customer? @relation(fields: [customerId], references: [id])
+
+  items        Item[]
+  payments     Payment[]
+  activityLogs ActivityLog[]
+
+  @@index([tableId])
+  @@index([responsibleUserId])
+  @@index([createdByUserId])
+  @@index([status])
+  @@index([paymentValidated])
+  @@index([customerId])
+}
+
+/**
+ * CATALOGUE PRODUITS
+ * Product = article/menu en base :
+ * - Coca 33cl
+ * - Poulet DG
+ * - Eau
+ * etc.
+ * Ce n’est PAS une ligne de facture.
+ * Une ligne de facture est le modèle Item plus bas.
+ */
+
+model Product {
+  id Int @id @default(autoincrement())
+
+  name     String
+  price    Float
+  category String?
+  active   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items Item[]
+
+  @@index([name])
+  @@index([active])
+  @@index([category])
+}
+
+/**
+ * ARTICLE DE FACTURE
+ * Item = ligne dans une facture.
+ * Exemple :
+ * - Coca 33cl x2 à 3.50 €
+ * - Poulet DG x1 à 18.00 €
+ * productId est optionnel :
+ * - productId rempli = vient du catalogue
+ * - productId null = article libre exceptionnel
+ */
+
+model Item {
+  id Int @id @default(autoincrement())
+
+  invoiceId Int
+  productId Int?
+
+  name      String
+  quantity  Int    @default(1)
+  unitPrice Float
+
+  addedByUserId   Int?
+  updatedByUserId Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  addedBy   User? @relation("AddedItems", fields: [addedByUserId], references: [id])
+  updatedBy User? @relation("UpdatedItems", fields: [updatedByUserId], references: [id])
+
+  @@index([invoiceId])
+  @@index([productId])
+  @@index([addedByUserId])
+}
+
+/**
+ * PAIEMENTS
+ * Permet de tracer chaque paiement :
+ * - carte
+ * - espèces
+ * - paiement différé
+ * - acompte éventuel
+ */
+
+model Payment {
+  id Int @id @default(autoincrement())
+
+  invoiceId Int
+  amount    Float
+  method    String
+  // CASH
+  // CARD
+  // DEFERRED
+  // OTHER
+
+  receivedByUserId Int?
+  customerId       Int?
+
+  note String?
+
+  createdAt DateTime @default(now())
+
+  invoice        Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  receivedByUser User?     @relation("PaymentReceivedBy", fields: [receivedByUserId], references: [id])
+  customer       Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([invoiceId])
+  @@index([method])
+  @@index([receivedByUserId])
+  @@index([customerId])
+}
+
+/**
+ * CLIENT HABITUÉ / CLIENT MAISON
+ * Pour les clients qui payent plus tard.
+ */
+
+model Customer {
+  id Int @id @default(autoincrement())
+
+  name   String
+  phone  String?
+  note   String?
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices Invoice[]
+  payments Payment[]
+
+  @@index([name])
+  @@index([active])
+}
+
+/**
+ * JOURNAL D’ACTIVITÉ
+ * C’est ultra important.
+ * Tout ce qui est sensible laisse une trace.
+ */
+
+model ActivityLog {
+  id Int @id @default(autoincrement())
+
+  action String
+  // CREATE_TABLE
+  // UPDATE_TABLE
+  // CREATE_INVOICE
+  // UPDATE_INVOICE
+  // ADD_ITEM
+  // UPDATE_ITEM
+  // DELETE_ITEM
+  // MOVE_TABLE
+  // MOVE_INVOICE
+  // REQUEST_PAYMENT
+  // UPDATE_PAYMENT
+  // VALIDATE_PAYMENT
+  // APPLY_DISCOUNT
+  // DEFER_PAYMENT
+  // BLOCK_USER
+  // UPDATE_ROLE
+  // CANCEL_INVOICE
+
+  actorUserId Int?
+
+  tableId   Int?
+  invoiceId Int?
+  itemId    Int?
+
+  targetType String?
+  targetId   Int?
+
+  details String?
+
+  createdAt DateTime @default(now())
+
+  actorUser User?    @relation("ActorLogs", fields: [actorUserId], references: [id])
+  table     Table?   @relation(fields: [tableId], references: [id])
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  @@index([actorUserId])
+  @@index([tableId])
+  @@index([invoiceId])
+  @@index([action])
+  @@index([createdAt])
+}

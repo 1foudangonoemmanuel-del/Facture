@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Admin - BRYX</title>
+
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+    <header class="simple-header">
+        <h1>Admin</h1>
+
+        <nav id="roleNav"></nav>
+    </header>
+
+    <div id="currentUserBar"></div>
+
+    <main class="admin-page">
+
+        <section class="admin-hero">
+            <div>
+                <h2>Gestion BRYX</h2>
+                <p>Comptes utilisateurs, rôles, blocage et catalogue produits.</p>
+            </div>
+
+            <button class="secondary" onclick="renderAdminPage()">
+                Rafraîchir
+            </button>
+        </section>
+
+        <section class="admin-grid">
+
+            <!-- UTILISATEURS -->
+            <section class="admin-card">
+                <div class="admin-card-header">
+                    <div>
+                        <h2>Utilisateurs</h2>
+                        <p>Serveurs, caisse, manager, admin.</p>
+                    </div>
+                </div>
+
+                <div class="admin-form">
+                    <input id="newUserName" type="text" placeholder="Nom utilisateur" />
+                    <input id="newUserPin" type="text" placeholder="Code PIN" />
+
+                    <select id="newUserRole">
+                        <option value="SERVER">SERVER</option>
+                        <option value="CAISSE">CAISSE</option>
+                        <option value="MANAGER">MANAGER</option>
+                        <option value="ADMIN">ADMIN</option>
+                    </select>
+
+                    <button onclick="createUser()">Créer utilisateur</button>
+                </div>
+
+                <div id="usersList" class="admin-list"></div>
+            </section>
+
+            <!-- CATALOGUE PRODUITS -->
+            <section class="admin-card">
+                <div class="admin-card-header">
+                    <div>
+                        <h2>Catalogue produits</h2>
+                        <p>Articles proposés dans la page service.</p>
+                    </div>
+                </div>
+
+                <div class="admin-form">
+                    <input id="newProductName" type="text" placeholder="Nom produit ex: Coca 33cl" />
+                    <input id="newProductPrice" type="number" step="0.01" min="0" placeholder="Prix" />
+                    <input id="newProductCategory" type="text" placeholder="Catégorie ex: Boissons" />
+
+                    <button onclick="createProduct()">Créer produit</button>
+                </div>
+
+                <div id="productsList" class="admin-list"></div>
+            </section>
+
+        </section>
+
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="permissions.js"></script>
+    <script src="admin.js"></script>
+
+    <script>
+        requireRole(["ADMIN"]);
+        injectRoleNav();
+        injectCurrentUserBar();
+        renderAdminPage();
+    </script>
+
+</body>
+
+</html>

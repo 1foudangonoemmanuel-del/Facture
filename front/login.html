@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Connexion - BRYX</title>
+
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+    <main class="login-page">
+        <section class="login-card">
+            <div class="login-logo">
+                <h1>BRYX</h1>
+                <p>Connexion service</p>
+            </div>
+
+            <div class="login-form">
+                <label>
+                    Nom utilisateur
+                    <input id="loginName" type="text" placeholder="Ex : Admin, Junior, Daniel..."
+                        autocomplete="username" />
+                </label>
+
+                <label>
+                    Code PIN
+                    <input id="loginPin" type="password" placeholder="Code PIN" autocomplete="current-password" />
+                </label>
+
+                <button onclick="login()">
+                    Se connecter
+                </button>
+            </div>
+
+            <div class="login-help">
+                <p>
+                    L’admin crée les comptes et donne le code PIN à chaque serveur.
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        initLoginPage();
+    </script>
+
+</body>
+
+</html>

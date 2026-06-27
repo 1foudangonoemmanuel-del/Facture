@@ -1,0 +1,357 @@
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from './prisma.service';
+
+@Injectable()
+export class InvoicesService {
+    constructor(private readonly prisma: PrismaService) { }
+
+    findAll() {
+        return this.prisma.invoice.findMany({
+            orderBy: {
+                createdAt: 'asc',
+            },
+            include: {
+                table: true,
+                responsibleUser: true,
+                createdByUser: true,
+                validatedByUser: true,
+                customer: true,
+                items: true,
+                payments: true,
+            },
+        });
+    }
+
+    async findOne(id: number) {
+        const invoice = await this.prisma.invoice.findUnique({
+            where: { id },
+            include: {
+                table: true,
+                responsibleUser: true,
+                createdByUser: true,
+                validatedByUser: true,
+                customer: true,
+                items: true,
+                payments: true,
+            },
+        });
+
+        if (!invoice) {
+            throw new NotFoundException('Facture introuvable');
+        }
+
+        return invoice;
+    }
+
+    async create(data: {
+        name?: string;
+        tableId?: number;
+        responsibleUserId?: number;
+        createdByUserId?: number;
+    }) {
+        let tableId: number | null = data.tableId || null;
+        let responsibleUserId: number | null = data.responsibleUserId || null;
+
+        if (tableId) {
+            const table = await this.prisma.table.findUnique({
+                where: { id: tableId },
+            });
+
+            if (!table) {
+                throw new NotFoundException('Table introuvable');
+            }
+
+            if (!responsibleUserId) {
+                responsibleUserId = table.responsibleUserId;
+            }
+        }
+
+        const invoice = await this.prisma.invoice.create({
+            data: {
+                name: data.name?.trim() || null,
+                tableId,
+                responsibleUserId,
+                createdByUserId: data.createdByUserId || null,
+                status: 'OPEN',
+            },
+        });
+
+        await this.prisma.activityLog.create({
+            data: {
+                action: 'CREATE_INVOICE',
+                actorUserId: data.createdByUserId || null,
+                tableId,
+                invoiceId: invoice.id,
+                details: tableId
+                    ? `Création facture sur table ${tableId}`
+                    : 'Création facture volante',
+            },
+        });
+
+        return this.findOne(invoice.id);
+    }
+
+    async update(
+        id: number,
+        data: {
+            name?: string;
+            status?: string;
+            actorUserId?: number;
+        },
+    ) {
+        const invoice = await this.findOne(id);
+
+        if (invoice.paymentValidated) {
+            throw new BadRequestException('Facture clôturée : modification interdite');
+        }
+
+        const updated = await this.prisma.invoice.update({
+            where: { id },
+            data: {
+                ...(data.name !== undefined ? { name: data.name.trim() || null } : {}),
+                ...(data.status !== undefined ? { status: data.status } : {}),
+            },
+        });
+
+        await this.prisma.activityLog.create({
+            data: {
+                action: 'UPDATE_INVOICE',
+                actorUserId: data.actorUserId || null,
+                tableId: invoice.tableId,
+                invoiceId: invoice.id,
+                details: `Modification facture ${invoice.id}`,
+            },
+        });
+
+        return this.findOne(updated.id);
+    }
+
+    async moveToTable(
+        id: number,
+        data: {
+            tableId: number | null;
+            actorUserId?: number;
+        },
+    ) {
+        const invoice = await this.findOne(id);
+
+        if (invoice.paymentValidated) {
+            throw new BadRequestException('Facture clôturée : déplacement interdit');
+        }
+
+        let responsibleUserId = invoice.responsibleUserId;
+
+        if (data.tableId) {
+            const table = await this.prisma.table.findUnique({
+                where: { id: data.tableId },
+            });
+
+            if (!table) {
+                throw new NotFoundException('Table introuvable');
+            }
+
+            responsibleUserId = table.responsibleUserId;
+        }
+
+        const updated = await this.prisma.invoice.update({
+            where: { id },
+            data: {
+                tableId: data.tableId,
+                responsibleUserId,
+            },
+        });
+
+        await this.prisma.activityLog.create({
+            data: {
+                action: 'MOVE_INVOICE',
+                actorUserId: data.actorUserId || null,
+                tableId: data.tableId || null,
+                invoiceId: invoice.id,
+                details: data.tableId
+                    ? `Facture déplacée vers table ${data.tableId}`
+                    : 'Facture rendue volante',
+            },
+        });
+
+        return this.findOne(updated.id);
+    }
+
+    async moveToUser(
+        id: number,
+        data: {
+            responsibleUserId: number;
+            actorUserId?: number;
+        },
+    ) {
+        const invoice = await this.findOne(id);
+
+        if (invoice.paymentValidated) {
+            throw new BadRequestException('Facture clôturée : déplacement interdit');
+        }
+
+        const user = await this.prisma.user.findUnique({
+            where: { id: data.responsibleUserId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('Utilisateur introuvable');
+        }
+
+        const updated = await this.prisma.invoice.update({
+            where: { id },
+            data: {
+                responsibleUserId: data.responsibleUserId,
+            },
+        });
+
+        await this.prisma.activityLog.create({
+            data: {
+                action: 'MOVE_INVOICE',
+                actorUserId: data.actorUserId || null,
+                tableId: invoice.tableId,
+                invoiceId: invoice.id,
+                targetType: 'USER',
+                targetId: user.id,
+                details: `Facture déplacée vers ${user.name}`,
+            },
+        });
+
+        return this.findOne(updated.id);
+    }
+
+    async requestPayment(id: number, data: { actorUserId?: number }) {
+        const invoice = await this.findOne(id);
+
+        if (invoice.paymentValidated) {
+            throw new BadRequestException('Facture déjà clôturée');
+        }
+
+        const updated = await this.prisma.invoice.update({
+            where: { id },
+            data: {
+                paymentRequested: true,
+                paymentRequestedAt: new Date(),
+                status: 'PAYMENT_REQUESTED',
+            },
+        });
+
+        await this.prisma.activityLog.create({
+            data: {
+                action: 'REQUEST_PAYMENT',
+                actorUserId: data.actorUserId || null,
+                tableId: invoice.tableId,
+                invoiceId: invoice.id,
+                details: `Règlement demandé pour facture ${invoice.id}`,
+            },
+        });
+
+        return this.findOne(updated.id);
+    }
+
+    async updatePayment(
+        id: number,
+        data: {
+            cashPaid?: number;
+            cardPaid?: number;
+            actorUserId?: number;
+        },
+    ) {
+        const invoice = await this.findOne(id);
+
+        if (invoice.paymentValidated) {
+            throw new BadRequestException('Facture clôturée : règlement verrouillé');
+        }
+
+        const cashPaid =
+            data.cashPaid !== undefined ? Number(data.cashPaid) : invoice.cashPaid;
+
+        const cardPaid =
+            data.cardPaid !== undefined ? Number(data.cardPaid) : invoice.cardPaid;
+
+        if (cashPaid < 0 || cardPaid < 0) {
+            throw new BadRequestException('Montant invalide');
+        }
+
+        const invoiceTotal = invoice.items.reduce((sum, item) => {
+            return sum + item.quantity * item.unitPrice;
+        }, 0);
+
+        const paidTotal = cashPaid + cardPaid;
+
+        const status =
+            invoiceTotal > 0 && paidTotal >= invoiceTotal
+                ? 'READY_TO_VALIDATE'
+                : paidTotal > 0
+                    ? 'PAYMENT_REQUESTED'
+                    : 'OPEN';
+
+        const updated = await this.prisma.invoice.update({
+            where: { id },
+            data: {
+                cashPaid,
+                cardPaid,
+                status,
+            },
+        });
+
+        await this.prisma.activityLog.create({
+            data: {
+                action: 'UPDATE_PAYMENT',
+                actorUserId: data.actorUserId || null,
+                tableId: invoice.tableId,
+                invoiceId: invoice.id,
+                details: `Règlement modifié : espèces ${cashPaid} €, CB ${cardPaid} €`,
+            },
+        });
+
+        return this.findOne(updated.id);
+    }
+
+    async validatePaid(id: number, data: { actorUserId?: number }) {
+        const invoice = await this.findOne(id);
+
+        if (invoice.paymentValidated) {
+            throw new BadRequestException('Facture déjà clôturée');
+        }
+
+        const invoiceTotal = invoice.items.reduce((sum, item) => {
+            return sum + item.quantity * item.unitPrice;
+        }, 0);
+
+        const paidTotal = invoice.cashPaid + invoice.cardPaid;
+
+        if (invoiceTotal <= 0) {
+            throw new BadRequestException('Impossible de clôturer une facture vide');
+        }
+
+        if (paidTotal < invoiceTotal) {
+            throw new BadRequestException('La facture n’est pas totalement réglée');
+        }
+
+        const updated = await this.prisma.invoice.update({
+            where: { id },
+            data: {
+                paymentValidated: true,
+                validatedByUserId: data.actorUserId || null,
+                validatedAt: new Date(),
+                status: 'PAID',
+            },
+        });
+
+        await this.prisma.activityLog.create({
+            data: {
+                action: 'VALIDATE_PAYMENT',
+                actorUserId: data.actorUserId || null,
+                tableId: invoice.tableId,
+                invoiceId: invoice.id,
+                details: `Facture ${invoice.id} clôturée comme réglée`,
+            },
+        });
+
+        return this.findOne(updated.id);
+    }
+}
