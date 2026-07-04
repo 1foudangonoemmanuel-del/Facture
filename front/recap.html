@@ -7,7 +7,7 @@
 
   <title>Récap - BRYX</title>
 
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=20260704-3" />
 </head>
 
 <body>
@@ -88,19 +88,19 @@
     </section>
 
     <section class="recap-actions">
-      <button onclick="window.print()">Imprimer / PDF</button>
-      <button class="secondary" onclick="copyRecapMessage()">Copier récap</button>
-      <button class="secondary" onclick="shareRecapOnWhatsApp()">Envoyer texte WhatsApp</button>
-      <button class="secondary" onclick="downloadRecapPdf()">Télécharger PDF</button>
+      <button type="button" onclick="window.print()">Imprimer / PDF</button>
+      <button type="button" class="secondary" onclick="copyRecapMessage()">Copier récap</button>
+      <button type="button" class="secondary" onclick="shareRecapOnWhatsApp()">Envoyer texte WhatsApp</button>
+      <button type="button" class="secondary" onclick="downloadRecapPdf()">Télécharger PDF</button>
     </section>
 
   </main>
 
   <div id="toast" class="toast"></div>
-  <script src="config.js"></script>
+  <script src="config.js?v=20260704-3"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="auth.js"></script>
-  <script src="script.js"></script>
+  <script src="auth.js?v=20260704-3"></script>
+  <script src="script.js?v=20260704-3"></script>
   <script>
     requireRole(["CAISSE", "MANAGER", "ADMIN"]);
     injectRoleNav();

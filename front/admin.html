@@ -7,7 +7,7 @@
 
     <title>Admin - BRYX</title>
 
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=20260704-3" />
 </head>
 
 <body>
@@ -28,7 +28,7 @@
                 <p>Comptes utilisateurs, rôles, blocage et catalogue produits.</p>
             </div>
 
-            <button class="secondary" onclick="renderAdminPage()">
+            <button type="button" class="secondary" onclick="renderAdminPage()">
                 Rafraîchir
             </button>
         </section>
@@ -55,7 +55,7 @@
                         <option value="ADMIN">ADMIN</option>
                     </select>
 
-                    <button onclick="createUser()">Créer utilisateur</button>
+                    <button type="button" onclick="createUser()">Créer utilisateur</button>
                 </div>
 
                 <div id="usersList" class="admin-list"></div>
@@ -75,7 +75,7 @@
                     <input id="newProductPrice" type="number" step="0.01" min="0" placeholder="Prix" />
                     <input id="newProductCategory" type="text" placeholder="Catégorie ex: Boissons" />
 
-                    <button onclick="createProduct()">Créer produit</button>
+                    <button type="button" onclick="createProduct()">Créer produit</button>
                 </div>
 
                 <div id="productsList" class="admin-list"></div>
@@ -87,10 +87,10 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="config.js"></script>
-    <script src="auth.js"></script>
-    <script src="permissions.js"></script>
-    <script src="admin.js"></script>
+    <script src="config.js?v=20260704-3"></script>
+    <script src="auth.js?v=20260704-3"></script>
+    <script src="permissions.js?v=20260704-3"></script>
+    <script src="admin.js?v=20260704-3"></script>
 
     <script>
         requireRole(["ADMIN"]);

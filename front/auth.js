@@ -164,6 +164,10 @@ async function login() {
 
         const user = await res.json();
 
+        if (!user?.token) {
+            throw new Error("Connexion incomplete: redeploie aussi le backend.");
+        }
+
         setCurrentUser(user);
 
         if (user.role === "ADMIN") {
