@@ -74,16 +74,32 @@ export class ItemsService {
             }
         }
 
-        const item = await this.prisma.item.create({
-            data: {
-                invoiceId: invoice.id,
-                productId,
-                name,
-                quantity,
-                unitPrice,
-                addedByUserId: actor.id,
-            },
+        const existingItem = await this.findMergeableItem(invoice.id, {
+            productId,
+            name,
+            unitPrice,
         });
+
+        const item = existingItem
+            ? await this.prisma.item.update({
+                where: {
+                    id: existingItem.id,
+                },
+                data: {
+                    quantity: existingItem.quantity + quantity,
+                    updatedByUserId: actor.id,
+                },
+            })
+            : await this.prisma.item.create({
+                data: {
+                    invoiceId: invoice.id,
+                    productId,
+                    name,
+                    quantity,
+                    unitPrice,
+                    addedByUserId: actor.id,
+                },
+            });
 
         await this.prisma.activityLog.create({
             data: {
@@ -243,5 +259,39 @@ export class ItemsService {
 
     private canOverridePrice(role: string) {
         return PRICE_MANAGERS.includes(role);
+    }
+
+    private async findMergeableItem(
+        invoiceId: number,
+        data: {
+            productId: number | null;
+            name: string;
+            unitPrice: number;
+        },
+    ) {
+        const items = await this.prisma.item.findMany({
+            where: {
+                invoiceId,
+            },
+        });
+
+        return items.find((item) => {
+            if (data.productId && item.productId) {
+                return (
+                    item.productId === data.productId &&
+                    Number(item.unitPrice) === Number(data.unitPrice)
+                );
+            }
+
+            return (
+                !item.productId &&
+                this.normalizeName(item.name) === this.normalizeName(data.name) &&
+                Number(item.unitPrice) === Number(data.unitPrice)
+            );
+        });
+    }
+
+    private normalizeName(value: string) {
+        return value.trim().toLocaleLowerCase();
     }
 }

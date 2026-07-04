@@ -24,6 +24,21 @@ function getCurrentUserId() {
     return user ? user.id : null;
 }
 
+function getAuthToken() {
+    const user = getCurrentUser();
+    return user ? user.token : null;
+}
+
+function getAuthHeaders() {
+    const token = getAuthToken();
+
+    return token
+        ? {
+            Authorization: `Bearer ${token}`,
+        }
+        : {};
+}
+
 function getCurrentUserRole() {
     const user = getCurrentUser();
     return user ? user.role : null;
@@ -76,7 +91,8 @@ function canUseServicePage() {
 function requireAuth() {
     const user = getCurrentUser();
 
-    if (!user) {
+    if (!user || !user.token) {
+        clearCurrentUser();
         window.location.href = "login.html";
         return null;
     }
@@ -166,7 +182,7 @@ async function login() {
 function initLoginPage() {
     const existingUser = getCurrentUser();
 
-    if (existingUser) {
+    if (existingUser && existingUser.token) {
         if (existingUser.role === "ADMIN") {
             window.location.href = "admin.html";
             return;
@@ -174,6 +190,10 @@ function initLoginPage() {
 
         window.location.href = "service.html";
         return;
+    }
+
+    if (existingUser && !existingUser.token) {
+        clearCurrentUser();
     }
 
     const nameInput = document.getElementById("loginName");

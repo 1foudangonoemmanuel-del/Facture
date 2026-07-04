@@ -200,6 +200,530 @@ textarea:focus {
   flex-basis: min(50%, 650px);
 }
 
+/* SERVER PHONE EXPERIENCE */
+
+body.server-phone-mode {
+  background: #f7f8fb;
+}
+
+body.server-phone-mode .simple-header,
+body.server-phone-mode #currentUserBar {
+  display: none;
+}
+
+body.server-phone-mode .service-page {
+  height: auto;
+  min-height: 100vh;
+  padding: 0;
+}
+
+body.server-phone-mode .split-workspace {
+  display: block;
+  min-height: 100vh;
+}
+
+body.server-phone-mode .left-board {
+  min-height: auto;
+}
+
+.server-phone-grid {
+  display: block;
+  height: auto;
+  overflow: visible;
+}
+
+.server-phone-shell {
+  width: min(100%, 520px);
+  min-height: 100vh;
+  margin: 0 auto;
+  background: #ffffff;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 14px 12px 18px;
+}
+
+.server-phone-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+
+.server-phone-user {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--surface-soft);
+  display: grid;
+  gap: 3px;
+}
+
+.server-phone-user span,
+.server-phone-money span,
+.server-phone-table-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.server-phone-user strong {
+  font-size: 18px;
+}
+
+.server-phone-logout {
+  min-width: 44px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: #dc2626;
+  font-size: 12px;
+}
+
+.server-phone-switch-wrap {
+  position: relative;
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 4px;
+  border-radius: 12px;
+  background: #111827;
+  color: white;
+  padding: 7px 8px;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.18);
+}
+
+.server-phone-switch-wrap span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.server-phone-switch {
+  width: 100%;
+  min-height: 31px;
+  background: transparent;
+  color: white;
+  border: 0;
+  border-radius: 8px;
+  font-weight: 800;
+  padding: 0 22px 0 0;
+}
+
+.server-phone-switch:focus {
+  box-shadow: none;
+}
+
+.server-phone-switch option {
+  color: #111827;
+}
+
+.server-phone-money {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.server-phone-money > div {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: white;
+}
+
+.server-phone-money strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 19px;
+  color: var(--success);
+}
+
+.server-phone-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.server-phone-actions button {
+  min-height: 42px;
+}
+
+.server-phone-create {
+  grid-template-columns: 1fr auto auto;
+  margin: 0 0 10px;
+}
+
+.server-phone-list {
+  display: grid;
+  gap: 10px;
+}
+
+.server-phone-table {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.server-phone-table.open {
+  border-color: #111827;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.server-phone-table.floating {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.server-phone-table-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.server-phone-table-head strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 18px;
+}
+
+.server-phone-table-head em {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.server-phone-head-actions {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.server-phone-chevron {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: white;
+  color: #374151;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.server-phone-table.open .server-phone-chevron {
+  background: #111827;
+  color: white;
+  border-color: #111827;
+}
+
+.server-phone-invoices {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.server-phone-invoice {
+  width: 100%;
+  color: var(--text);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: none;
+  text-align: left;
+  overflow: hidden;
+}
+
+.server-phone-invoice-toggle {
+  width: 100%;
+  color: var(--text);
+  background: white;
+  box-shadow: none;
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 8px;
+}
+
+.server-phone-invoice.selected {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.server-phone-invoice-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.server-phone-invoice-head strong {
+  font-size: 15px;
+}
+
+.server-phone-invoice-head span {
+  font-weight: 900;
+  color: var(--success);
+  white-space: nowrap;
+}
+
+.server-phone-invoice-recap,
+.server-phone-invoice-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.server-phone-item-preview {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+
+.server-phone-invoice-body {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.server-phone-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+  padding: 9px;
+}
+
+.server-phone-panel-title,
+.server-phone-payment-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.server-phone-panel-title strong {
+  font-size: 14px;
+}
+
+.server-phone-panel-title span,
+.server-phone-payment-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.server-phone-locked {
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #166534;
+  padding: 9px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.server-phone-products {
+  display: grid;
+  gap: 8px;
+}
+
+.server-phone-category-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.server-phone-category {
+  flex: 0 0 auto;
+  background: white;
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+.server-phone-category.active {
+  background: #111827;
+  color: white;
+  border-color: #111827;
+}
+
+.server-phone-product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.server-phone-product {
+  min-height: 46px;
+  display: grid;
+  gap: 3px;
+  align-content: center;
+  background: #f8fafc;
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  text-align: left;
+  padding: 8px;
+}
+
+.server-phone-product strong,
+.server-phone-product span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-phone-product span {
+  color: var(--success);
+  font-size: 12px;
+}
+
+.server-phone-add-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px auto;
+  gap: 6px;
+}
+
+.server-phone-items {
+  display: grid;
+  gap: 7px;
+}
+
+.server-phone-item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px;
+  background: #ffffff;
+}
+
+.server-phone-item-row strong,
+.server-phone-item-row span {
+  display: block;
+}
+
+.server-phone-item-row span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.server-phone-qty {
+  display: grid;
+  grid-template-columns: 30px 30px 30px;
+  gap: 4px;
+  align-items: center;
+}
+
+.server-phone-qty span {
+  margin: 0;
+  color: var(--text);
+  text-align: center;
+  font-weight: 900;
+}
+
+.server-phone-payment-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.server-phone-payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.server-phone-item-preview span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.server-phone-item-preview em {
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.server-phone-status {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.server-phone-status.paid {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.server-phone-status.partial {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.server-phone-status.ready {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.server-phone-empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 18px 12px;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 700;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.server-phone-empty.compact {
+  padding: 10px;
+  font-size: 13px;
+}
+
+body.server-phone-mode .invoice-detail-panel {
+  display: none;
+}
+
 .server-header {
   display: flex;
   justify-content: space-between;
@@ -751,6 +1275,39 @@ textarea:focus {
   color: var(--muted);
   line-height: 1.45;
   white-space: pre-line;
+}
+
+.history-modal {
+  width: min(760px, 100%);
+  max-height: min(78vh, 760px);
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.history-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.history-modal-header h2 {
+  margin: 0;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.history-row {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
 }
 
 .modal-actions {

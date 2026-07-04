@@ -1,5 +1,6 @@
 import {
     BadRequestException,
+    ForbiddenException,
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
@@ -109,6 +110,12 @@ export class InvoicesService {
             throw new BadRequestException('Facture clôturée : modification interdite');
         }
 
+        if (data.status !== undefined && data.status !== 'CANCELLED') {
+            throw new BadRequestException(
+                'Le statut facture se modifie via une action métier dédiée',
+            );
+        }
+
         const updated = await this.prisma.invoice.update({
             where: { id },
             data: {
@@ -119,11 +126,14 @@ export class InvoicesService {
 
         await this.prisma.activityLog.create({
             data: {
-                action: 'UPDATE_INVOICE',
+                action: data.status === 'CANCELLED' ? 'CANCEL_INVOICE' : 'UPDATE_INVOICE',
                 actorUserId: data.actorUserId || null,
                 tableId: invoice.tableId,
                 invoiceId: invoice.id,
-                details: `Modification facture ${invoice.id}`,
+                details:
+                    data.status === 'CANCELLED'
+                        ? `Facture ${invoice.id} annulée`
+                        : `Modification facture ${invoice.id}`,
             },
         });
 
@@ -135,6 +145,7 @@ export class InvoicesService {
         data: {
             tableId: number | null;
             actorUserId?: number;
+            actorRole?: string;
         },
     ) {
         const invoice = await this.findOne(id);
@@ -145,6 +156,15 @@ export class InvoicesService {
 
         let responsibleUserId = invoice.responsibleUserId;
 
+        if (
+            data.actorRole === 'SERVER' &&
+            Number(invoice.responsibleUserId) !== Number(data.actorUserId)
+        ) {
+            throw new ForbiddenException(
+                'Un serveur ne peut déplacer que ses propres factures',
+            );
+        }
+
         if (data.tableId) {
             const table = await this.prisma.table.findUnique({
                 where: { id: data.tableId },
@@ -152,6 +172,15 @@ export class InvoicesService {
 
             if (!table) {
                 throw new NotFoundException('Table introuvable');
+            }
+
+            if (
+                data.actorRole === 'SERVER' &&
+                Number(table.responsibleUserId) !== Number(data.actorUserId)
+            ) {
+                throw new ForbiddenException(
+                    'Un serveur ne peut déplacer une facture que vers ses tables',
+                );
             }
 
             responsibleUserId = table.responsibleUserId;

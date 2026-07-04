@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req } from '@nestjs/common';
+import { Roles } from './auth.decorators';
+import type { AuthenticatedRequest } from './auth.guard';
 import { UsersService } from './users.service';
 
 @Controller('api/users')
@@ -16,51 +18,62 @@ export class UsersController {
     }
 
     @Post()
+    @Roles('ADMIN')
     create(
+        @Req() request: AuthenticatedRequest,
         @Body()
         body: {
             name: string;
             pin?: string;
             role?: string;
-            actorUserId?: number;
         },
     ) {
-        return this.usersService.create(body);
+        return this.usersService.create({
+            ...body,
+            actorUserId: request.user.id,
+        });
     }
 
     @Patch(':id/role')
+    @Roles('ADMIN')
     updateRole(
+        @Req() request: AuthenticatedRequest,
         @Param('id') id: string,
         @Body()
         body: {
             role: string;
-            actorUserId?: number;
         },
     ) {
-        return this.usersService.updateRole(Number(id), body);
+        return this.usersService.updateRole(Number(id), {
+            ...body,
+            actorUserId: request.user.id,
+        });
     }
 
     @Patch(':id/block')
+    @Roles('ADMIN')
     blockUser(
+        @Req() request: AuthenticatedRequest,
         @Param('id') id: string,
-        @Body() body: { actorUserId?: number },
     ) {
-        return this.usersService.blockUser(Number(id), body.actorUserId);
+        return this.usersService.blockUser(Number(id), request.user.id);
     }
 
     @Patch(':id/unblock')
+    @Roles('ADMIN')
     unblockUser(
+        @Req() request: AuthenticatedRequest,
         @Param('id') id: string,
-        @Body() body: { actorUserId?: number },
     ) {
-        return this.usersService.unblockUser(Number(id), body.actorUserId);
+        return this.usersService.unblockUser(Number(id), request.user.id);
     }
 
     @Delete(':id')
+    @Roles('ADMIN')
     deleteUser(
+        @Req() request: AuthenticatedRequest,
         @Param('id') id: string,
-        @Body() body: { actorUserId?: number },
     ) {
-        return this.usersService.deleteUser(Number(id), body.actorUserId);
+        return this.usersService.deleteUser(Number(id), request.user.id);
     }
 }

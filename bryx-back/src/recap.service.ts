@@ -6,10 +6,16 @@ export class RecapService {
     constructor(private readonly prisma: PrismaService) { }
 
     async getTodayRecap() {
+        const { start, end } = this.getTodayBounds();
+
         const invoices = await this.prisma.invoice.findMany({
             where: {
                 status: {
                     not: 'CANCELLED',
+                },
+                createdAt: {
+                    gte: start,
+                    lt: end,
                 },
             },
             orderBy: {
@@ -31,10 +37,23 @@ export class RecapService {
                 status: {
                     not: 'CANCELLED',
                 },
+                createdAt: {
+                    gte: start,
+                    lt: end,
+                },
             },
             include: {
                 responsibleUser: true,
                 invoices: {
+                    where: {
+                        status: {
+                            not: 'CANCELLED',
+                        },
+                        createdAt: {
+                            gte: start,
+                            lt: end,
+                        },
+                    },
                     include: {
                         items: true,
                     },
@@ -197,5 +216,15 @@ export class RecapService {
                 : 0;
 
         return Math.min(grossTotal, amountDiscount + percentDiscount);
+    }
+
+    private getTodayBounds() {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(start);
+        end.setDate(end.getDate() + 1);
+
+        return { start, end };
     }
 }

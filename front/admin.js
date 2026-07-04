@@ -7,7 +7,11 @@ let adminToastTimeout = null;
 /* -------------------- API -------------------- */
 
 async function adminGet(path) {
-    const res = await fetch(`${ADMIN_API_URL}${path}`);
+    const res = await fetch(`${ADMIN_API_URL}${path}`, {
+        headers: {
+            ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
+        },
+    });
 
     if (!res.ok) {
         throw new Error(await res.text());
@@ -21,6 +25,7 @@ async function adminPost(path, body) {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
+            ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
         },
         body: JSON.stringify(body),
     });
@@ -37,6 +42,7 @@ async function adminPatch(path, body) {
         method: "PATCH",
         headers: {
             "Content-Type": "application/json",
+            ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
         },
         body: JSON.stringify(body),
     });
@@ -53,6 +59,7 @@ async function adminDelete(path, body = {}) {
         method: "DELETE",
         headers: {
             "Content-Type": "application/json",
+            ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
         },
         body: JSON.stringify(body),
     });

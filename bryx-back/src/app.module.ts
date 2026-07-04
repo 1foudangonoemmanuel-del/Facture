@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { PrismaService } from './prisma.service';
+import { BryxAuthGuard } from './auth.guard';
 
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -53,6 +55,10 @@ import { AuthService } from './auth.service';
     RecapService,
     ActivityLogsService,
     AuthService,
+    {
+      provide: APP_GUARD,
+      useClass: BryxAuthGuard,
+    },
   ],
 })
 export class AppModule { }

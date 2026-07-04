@@ -204,7 +204,7 @@ function canBlockUsers() {
 }
 
 function canViewActivityLogs() {
-    return hasRole("ADMIN", "MANAGER");
+    return hasRole("ADMIN", "MANAGER", "CAISSE");
 }
 
 /* -------------------- HELPERS UI -------------------- */

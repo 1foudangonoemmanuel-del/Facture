@@ -5,6 +5,7 @@ let tables = [];
 let invoices = [];
 let products = [];
 let invoiceLogs = [];
+let serviceLogs = [];
 
 let selectedInvoiceId =
   Number(localStorage.getItem("bryx_selected_invoice_backend")) || null;
@@ -12,6 +13,12 @@ let selectedInvoiceId =
 let contextServerId = null;
 let pendingConfirmAction = null;
 let toastTimeout = null;
+
+function lockActionButtons(scope = document) {
+  scope.querySelectorAll("button:not([type])").forEach((button) => {
+    button.type = "button";
+  });
+}
 
 /* -------------------- CURRENT USER -------------------- */
 
@@ -51,7 +58,11 @@ function ensureConnected() {
 /* -------------------- API -------------------- */
 
 async function apiGet(path) {
-  const res = await fetch(`${API_URL}${path}`);
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: {
+      ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
+    },
+  });
 
   if (!res.ok) {
     throw new Error(await res.text());
@@ -65,6 +76,7 @@ async function apiPost(path, body) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
     },
     body: JSON.stringify(body),
   });
@@ -81,6 +93,7 @@ async function apiPatch(path, body) {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
+      ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
     },
     body: JSON.stringify(body),
   });
@@ -97,6 +110,7 @@ async function apiDelete(path, body = {}) {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
+      ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
     },
     body: JSON.stringify(body),
   });
@@ -117,17 +131,8 @@ async function loadServiceData() {
   products = await apiGet("/products");
 }
 
-async function loadInvoiceLogs(invoiceId) {
-  if (!invoiceId) {
-    invoiceLogs = [];
-    return;
-  }
-
-  try {
-    invoiceLogs = await apiGet(`/activity-logs/invoice/${invoiceId}`);
-  } catch {
-    invoiceLogs = [];
-  }
+async function loadServiceLogs() {
+  serviceLogs = await apiGet("/activity-logs");
 }
 
 /* -------------------- HELPERS -------------------- */
@@ -139,6 +144,12 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function escapeJsString(value) {
+  return String(value ?? "")
+    .replaceAll("\\", "\\\\")
+    .replaceAll("'", "\\'");
 }
 
 function formatMoney(value) {
@@ -482,6 +493,223 @@ function setServerFilter(serverId, filter) {
   renderServicePage();
 }
 
+function getServerPhoneViewId(user, visibleServers) {
+  const saved = Number(localStorage.getItem("bryx_server_phone_view"));
+  const savedExists = visibleServers.some((server) => server.id === saved);
+
+  if (savedExists) return saved;
+
+  const ownExists = visibleServers.some((server) => server.id === user.id);
+  return ownExists ? user.id : visibleServers[0]?.id || null;
+}
+
+function setServerPhoneView(serverId) {
+  localStorage.setItem("bryx_server_phone_view", String(serverId));
+  localStorage.removeItem("bryx_server_phone_open_table");
+  localStorage.removeItem("bryx_server_phone_open_invoice");
+  selectedInvoiceId = null;
+  localStorage.removeItem("bryx_selected_invoice_backend");
+  renderServicePage();
+}
+
+function getOpenServerPhoneTable() {
+  return localStorage.getItem("bryx_server_phone_open_table");
+}
+
+function getOpenServerPhoneInvoiceId() {
+  return Number(localStorage.getItem("bryx_server_phone_open_invoice")) || null;
+}
+
+function toggleServerPhoneTable(tableKey) {
+  const current = getOpenServerPhoneTable();
+
+  if (current === String(tableKey)) {
+    localStorage.removeItem("bryx_server_phone_open_table");
+    localStorage.removeItem("bryx_server_phone_open_invoice");
+    selectedInvoiceId = null;
+    localStorage.removeItem("bryx_selected_invoice_backend");
+  } else {
+    localStorage.setItem("bryx_server_phone_open_table", String(tableKey));
+    localStorage.removeItem("bryx_server_phone_open_invoice");
+    selectedInvoiceId = null;
+    localStorage.removeItem("bryx_selected_invoice_backend");
+  }
+
+  renderServicePage();
+}
+
+function isServerPhoneModeActive() {
+  return currentUserRole() === "SERVER";
+}
+
+function renderServerPhonePageFromState() {
+  const user = currentUser();
+  const grid = document.getElementById("serviceGrid");
+
+  if (!user || !grid) return false;
+
+  const visibleServers = getVisibleServersForCurrentUser();
+  document.body.classList.add("server-phone-mode");
+  document.body.classList.toggle("has-selected-invoice", Boolean(selectedInvoiceId));
+  renderServerPhonePage(user, visibleServers);
+  lockActionButtons(grid);
+
+  return true;
+}
+
+function renderServerPhoneInvoiceFromState(invoiceId, options = {}) {
+  const invoice = invoices.find((inv) => inv.id === invoiceId);
+  const node = document.getElementById(`server-phone-invoice-${invoiceId}`);
+
+  if (!invoice || !node) {
+    return renderServerPhonePageFromState();
+  }
+
+  node.classList.toggle("selected", getOpenServerPhoneInvoiceId() === invoice.id);
+
+  const total = document.getElementById(`server-phone-invoice-total-${invoiceId}`);
+  if (total) total.textContent = formatMoney(getInvoiceTotal(invoice));
+
+  const count = document.getElementById(`server-phone-invoice-count-${invoiceId}`);
+  if (count) count.textContent = `${(invoice.items || []).length} article(s)`;
+
+  const status = document.getElementById(`server-phone-invoice-status-${invoiceId}`);
+  if (status) {
+    status.className = `server-phone-status ${getPaymentClass(invoice)}`;
+    status.textContent = getPaymentStatusLabel(invoice);
+  }
+
+  const articleTotal = document.getElementById(`server-phone-article-total-${invoiceId}`);
+  if (articleTotal) articleTotal.textContent = formatMoney(getInvoiceTotal(invoice));
+
+  const remaining = document.getElementById(`server-phone-remaining-${invoiceId}`);
+  if (remaining) remaining.textContent = `Reste ${formatMoney(getInvoiceRemaining(invoice))}`;
+
+  const paymentSummary = document.getElementById(`server-phone-payment-summary-${invoiceId}`);
+  if (paymentSummary) {
+    paymentSummary.innerHTML = `
+      <span>CB ${formatMoney(getInvoiceCardPaid(invoice))}</span>
+      <span>Espèces ${formatMoney(getInvoiceCashPaid(invoice))}</span>
+    `;
+  }
+
+  if (options.syncPaymentInputs) {
+    const cardInput = document.getElementById(`card-paid-${invoiceId}`);
+    if (cardInput) cardInput.value = getInvoiceCardPaid(invoice);
+
+    const cashInput = document.getElementById(`cash-paid-${invoiceId}`);
+    if (cashInput) cashInput.value = getInvoiceCashPaid(invoice);
+  }
+
+  const items = document.getElementById(`server-phone-items-${invoiceId}`);
+  if (items) items.innerHTML = renderServerPhoneItemsHtml(invoice);
+
+  lockActionButtons(node);
+
+  return true;
+}
+
+function mergeItemIntoLocalInvoice(invoiceId, item) {
+  const invoice = invoices.find((inv) => inv.id === invoiceId);
+  if (!invoice || !item) return;
+
+  invoice.items = invoice.items || [];
+
+  const index = invoice.items.findIndex((existing) => existing.id === item.id);
+
+  if (index >= 0) {
+    invoice.items[index] = {
+      ...invoice.items[index],
+      ...item,
+    };
+    return;
+  }
+
+  invoice.items.push(item);
+}
+
+function mergeInvoiceIntoLocalState(updatedInvoice) {
+  if (!updatedInvoice) return;
+
+  const index = invoices.findIndex((invoice) => invoice.id === updatedInvoice.id);
+
+  if (index >= 0) {
+    invoices[index] = {
+      ...invoices[index],
+      ...updatedInvoice,
+    };
+  }
+}
+
+function removeItemFromLocalInvoice(invoiceId, itemId) {
+  const invoice = invoices.find((inv) => inv.id === invoiceId);
+  if (!invoice || !invoice.items) return;
+
+  invoice.items = invoice.items.filter((item) => item.id !== itemId);
+}
+
+function getServerPhoneCategory(invoiceId) {
+  return localStorage.getItem(`bryx_server_phone_category_${invoiceId}`) || "all";
+}
+
+function setServerPhoneCategory(invoiceId, category) {
+  localStorage.setItem(`bryx_server_phone_category_${invoiceId}`, category);
+  renderServerPhonePageFromState();
+}
+
+function getProductCategories() {
+  const categories = products
+    .map((product) => product.category || "Sans catégorie")
+    .filter((category, index, list) => list.indexOf(category) === index);
+
+  return ["all", ...categories];
+}
+
+async function quickAddProductToInvoice(invoiceId, productId) {
+  const invoice = invoices.find((inv) => inv.id === invoiceId);
+  const product = products.find((item) => item.id === productId);
+
+  if (!invoice || !product) return;
+
+  if (!canAddItem() || !canActOnInvoice(invoice) || isInvoiceLocked(invoice)) {
+    showToast("Tu ne peux pas ajouter d'article sur cette facture.", "error");
+    return;
+  }
+
+  try {
+    const item = await apiPost(`/invoices/${invoiceId}/items`, {
+      productId,
+      quantity: 1,
+      addedByUserId: currentUserId(),
+      actorUserId: currentUserId(),
+    });
+
+    mergeItemIntoLocalInvoice(invoiceId, item);
+    renderServerPhoneInvoiceFromState(invoiceId);
+    showToast(`${product.name} ajouté.`);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function toggleServerPhoneInvoice(invoiceId, tableKey) {
+  const current = getOpenServerPhoneInvoiceId();
+
+  localStorage.setItem("bryx_server_phone_open_table", String(tableKey));
+
+  if (current === Number(invoiceId)) {
+    localStorage.removeItem("bryx_server_phone_open_invoice");
+    selectedInvoiceId = null;
+    localStorage.removeItem("bryx_selected_invoice_backend");
+  } else {
+    localStorage.setItem("bryx_server_phone_open_invoice", String(invoiceId));
+    selectedInvoiceId = invoiceId;
+    localStorage.setItem("bryx_selected_invoice_backend", String(invoiceId));
+  }
+
+  renderServicePage();
+}
+
 function shouldShowInvoiceForServer(invoice, serverId) {
   const filter = getActiveFilter(serverId);
   const status = getInvoicePaymentStatus(invoice);
@@ -580,9 +808,28 @@ async function confirmAction() {
 
 /* -------------------- GLOBAL EVENTS -------------------- */
 
+document.addEventListener(
+  "click",
+  (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+
+    if (!button.getAttribute("type")) {
+      button.type = "button";
+      event.preventDefault();
+    }
+  },
+  true
+);
+
+document.addEventListener("submit", (event) => {
+  event.preventDefault();
+});
+
 document.addEventListener("click", (event) => {
   const confirmButton = document.getElementById("confirmButton");
   const confirmOverlay = document.getElementById("confirmOverlay");
+  const historyOverlay = document.getElementById("historyOverlay");
   const menu = document.getElementById("serverContextMenu");
 
   if (confirmButton && event.target === confirmButton) {
@@ -593,6 +840,10 @@ document.addEventListener("click", (event) => {
     closeConfirmModal();
   }
 
+  if (historyOverlay && event.target === historyOverlay) {
+    closeServiceHistory();
+  }
+
   if (menu && !menu.contains(event.target)) {
     closeServerContextMenu();
   }
@@ -601,6 +852,7 @@ document.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeConfirmModal();
+    closeServiceHistory();
     closeServerContextMenu();
     closeAllInlineForms();
   }
@@ -1155,13 +1407,20 @@ async function addItem(invoiceId) {
   }
 
   try {
-    await apiPost(`/invoices/${invoiceId}/items`, body);
+    const item = await apiPost(`/invoices/${invoiceId}/items`, body);
 
     nameInput.value = "";
     priceInput.value = "";
-    nameInput.focus();
+    if (isServerPhoneModeActive()) {
+      mergeItemIntoLocalInvoice(invoiceId, item);
+      renderServerPhoneInvoiceFromState(invoiceId, { syncPaymentInputs: true });
 
-    await renderServicePage();
+      const nextNameInput = document.getElementById(`item-name-${invoiceId}`);
+      if (nextNameInput) nextNameInput.focus();
+    } else {
+      await renderServicePage();
+      nameInput.focus();
+    }
     showToast(product ? `${product.name} ajouté.` : "Article libre ajouté.");
   } catch (error) {
     showError(error);
@@ -1191,8 +1450,14 @@ async function updateItem(invoiceId, itemId, field, value) {
   if (field === "unitPrice") body.unitPrice = Math.max(0, parseFloat(value) || 0);
 
   try {
-    await apiPatch(`/items/${itemId}`, body);
-    await renderServicePage();
+    const item = await apiPatch(`/items/${itemId}`, body);
+
+    if (isServerPhoneModeActive()) {
+      mergeItemIntoLocalInvoice(invoiceId, item);
+      renderServerPhoneInvoiceFromState(invoiceId);
+    } else {
+      await renderServicePage();
+    }
   } catch (error) {
     showError(error);
   }
@@ -1213,7 +1478,12 @@ async function changeItemQuantity(invoiceId, itemId, delta) {
   const nextQuantity = Number(item.quantity) + delta;
 
   if (nextQuantity <= 0) {
-    await deleteItem(invoiceId, itemId);
+    openConfirmModal({
+      title: `Supprimer ${item.name} ?`,
+      text: "La quantité va passer à zéro, l'article sera retiré de la facture.",
+      confirmText: "Supprimer",
+      onConfirm: () => deleteItem(invoiceId, itemId),
+    });
     return;
   }
 
@@ -1233,7 +1503,12 @@ async function deleteItem(invoiceId, itemId) {
       actorUserId: currentUserId(),
     });
 
-    await renderServicePage();
+    if (isServerPhoneModeActive()) {
+      removeItemFromLocalInvoice(invoiceId, itemId);
+      renderServerPhoneInvoiceFromState(invoiceId);
+    } else {
+      await renderServicePage();
+    }
     showToast("Article supprimé.");
   } catch (error) {
     showError(error);
@@ -1257,13 +1532,18 @@ async function setInvoicePayment(invoiceId) {
   const cardPaid = Math.max(0, parseFloat(cardInput ? cardInput.value : 0) || 0);
 
   try {
-    await apiPatch(`/invoices/${invoiceId}/payment`, {
+    const updatedInvoice = await apiPatch(`/invoices/${invoiceId}/payment`, {
       cashPaid,
       cardPaid,
       actorUserId: currentUserId(),
     });
 
-    await renderServicePage();
+    if (isServerPhoneModeActive()) {
+      mergeInvoiceIntoLocalState(updatedInvoice);
+      renderServerPhoneInvoiceFromState(invoiceId, { syncPaymentInputs: true });
+    } else {
+      await renderServicePage();
+    }
     showToast("Mode de règlement mis à jour.");
   } catch (error) {
     showError(error);
@@ -1279,13 +1559,18 @@ async function markInvoicePaidByCard(invoiceId) {
   }
 
   try {
-    await apiPatch(`/invoices/${invoiceId}/payment`, {
+    const updatedInvoice = await apiPatch(`/invoices/${invoiceId}/payment`, {
       cashPaid: 0,
       cardPaid: getInvoiceTotal(invoice),
       actorUserId: currentUserId(),
     });
 
-    await renderServicePage();
+    if (isServerPhoneModeActive()) {
+      mergeInvoiceIntoLocalState(updatedInvoice);
+      renderServerPhoneInvoiceFromState(invoiceId, { syncPaymentInputs: true });
+    } else {
+      await renderServicePage();
+    }
     showToast("Montant CB enregistré.");
   } catch (error) {
     showError(error);
@@ -1301,13 +1586,18 @@ async function markInvoicePaidByCash(invoiceId) {
   }
 
   try {
-    await apiPatch(`/invoices/${invoiceId}/payment`, {
+    const updatedInvoice = await apiPatch(`/invoices/${invoiceId}/payment`, {
       cashPaid: getInvoiceTotal(invoice),
       cardPaid: 0,
       actorUserId: currentUserId(),
     });
 
-    await renderServicePage();
+    if (isServerPhoneModeActive()) {
+      mergeInvoiceIntoLocalState(updatedInvoice);
+      renderServerPhoneInvoiceFromState(invoiceId);
+    } else {
+      await renderServicePage();
+    }
     showToast("Montant espèces enregistré.");
   } catch (error) {
     showError(error);
@@ -1373,13 +1663,10 @@ async function renderServicePage() {
 
   clearSelectedInvoiceIfMissing();
 
-  if (selectedInvoiceId) {
-    await loadInvoiceLogs(selectedInvoiceId);
-  } else {
-    invoiceLogs = [];
-  }
-
   const visibleServers = getVisibleServersForCurrentUser();
+  const serverPhoneMode = user.role === "SERVER";
+  document.body.classList.toggle("server-phone-mode", serverPhoneMode);
+  document.body.classList.toggle("has-selected-invoice", Boolean(selectedInvoiceId));
 
   const currentUserBar = document.getElementById("currentUserBar");
   if (currentUserBar) {
@@ -1392,9 +1679,17 @@ async function renderServicePage() {
           ${escapeHtml(user.role)}
           ${typeof permissionLabelForCurrentUser === "function" ? `• ${escapeHtml(permissionLabelForCurrentUser())}` : ""}
         </span>
-        <button class="small secondary" onclick="logout()">Déconnexion</button>
+        <button type="button" class="small secondary" onclick="logout()">Déconnexion</button>
       </div>
     `;
+    if (canOpenServiceHistory()) {
+      currentUserBar
+        .querySelector(".current-user-bar span")
+        ?.insertAdjacentHTML(
+          "afterend",
+          `<button type="button" class="small secondary" onclick="openServiceHistory()">Historique</button>`
+        );
+    }
   }
 
   grid.innerHTML = "";
@@ -1409,6 +1704,12 @@ async function renderServicePage() {
       </div>
     `;
     renderInvoiceDetailPanel();
+    return;
+  }
+
+  if (serverPhoneMode) {
+    renderServerPhonePage(user, visibleServers);
+    lockActionButtons(grid);
     return;
   }
 
@@ -1457,33 +1758,33 @@ async function renderServicePage() {
 
         <div class="server-actions">
           ${canCreateInvoice() && canActHere
-        ? `<button class="small" onclick="addFloatingInvoice(${server.id})">+ Facture volante</button>`
+        ? `<button type="button" class="small" onclick="addFloatingInvoice(${server.id})">+ Facture volante</button>`
         : ""
       }
 
           ${canOpenTable() && canActHere
-        ? `<button class="small secondary" onclick="showCreateTableForm(${server.id})">Ouvrir table</button>`
+        ? `<button type="button" class="small secondary" onclick="showCreateTableForm(${server.id})">Ouvrir table</button>`
         : ""
       }
         </div>
       </div>
 
       <div class="server-filters">
-        <button class="server-filter-btn ${activeFilter === "all" ? "active" : ""}" onclick="setServerFilter(${server.id}, 'all')">
+        <button type="button" class="server-filter-btn ${activeFilter === "all" ? "active" : ""}" onclick="setServerFilter(${server.id}, 'all')">
           Toutes
         </button>
-        <button class="server-filter-btn ${activeFilter === "open" ? "active" : ""}" onclick="setServerFilter(${server.id}, 'open')">
+        <button type="button" class="server-filter-btn ${activeFilter === "open" ? "active" : ""}" onclick="setServerFilter(${server.id}, 'open')">
           En cours (${paymentStats.openCount})
         </button>
-        <button class="server-filter-btn ${activeFilter === "paid" ? "active" : ""}" onclick="setServerFilter(${server.id}, 'paid')">
+        <button type="button" class="server-filter-btn ${activeFilter === "paid" ? "active" : ""}" onclick="setServerFilter(${server.id}, 'paid')">
           Réglées (${paymentStats.paidCount})
         </button>
       </div>
 
       <div id="create-table-${server.id}" class="server-create-table">
         <input id="new-table-name-${server.id}" placeholder="Nom de la table..." />
-        <button onclick="addTable(${server.id})">Ouvrir</button>
-        <button class="secondary" onclick="closeCreateTableForm(${server.id})">Annuler</button>
+        <button type="button" onclick="addTable(${server.id})">Ouvrir</button>
+        <button type="button" class="secondary" onclick="closeCreateTableForm(${server.id})">Annuler</button>
       </div>
 
       <h4 class="zone-title">Tables ouvertes</h4>
@@ -1500,6 +1801,201 @@ async function renderServicePage() {
   });
 
   renderInvoiceDetailPanel();
+  lockActionButtons(document);
+}
+
+function renderServerPhonePage(user, visibleServers) {
+  const grid = document.getElementById("serviceGrid");
+  if (!grid) return;
+
+  const viewedServerId = getServerPhoneViewId(user, visibleServers);
+  const viewedServer = visibleServers.find((server) => server.id === viewedServerId);
+
+  grid.innerHTML = "";
+  grid.className = "service-grid server-phone-grid";
+
+  if (!viewedServer) {
+    grid.innerHTML = `<div class="empty-message">Aucun serveur disponible.</div>`;
+    return;
+  }
+
+  const ownView = viewedServer.id === user.id;
+  const serverTables = tables.filter((table) => getServerIdFromTable(table) === viewedServer.id);
+  const floatingInvoices = invoices.filter((invoice) => {
+    return invoice.tableId === null && getServerIdFromInvoice(invoice) === viewedServer.id;
+  });
+  const paymentStats = getServerPaymentStats(viewedServer.id);
+
+  const shell = document.createElement("section");
+  shell.className = "server-phone-shell";
+
+  shell.innerHTML = `
+    <div class="server-phone-top">
+      <div class="server-phone-user">
+        <span>${ownView ? "Mon service" : "Service consulté"}</span>
+        <strong>${escapeHtml(viewedServer.name)}</strong>
+      </div>
+
+      <button type="button" class="server-phone-logout" onclick="logout()">Déconnexion</button>
+
+      <label class="server-phone-switch-wrap">
+        <span>Autres écrans</span>
+        <select class="server-phone-switch" onchange="setServerPhoneView(Number(this.value))">
+          ${visibleServers
+      .map((server) => {
+        return `
+            <option value="${server.id}" ${server.id === viewedServer.id ? "selected" : ""}>
+              ${server.id === user.id ? "Moi - " : ""}${escapeHtml(server.name)}
+            </option>
+          `;
+      })
+      .join("")}
+        </select>
+      </label>
+    </div>
+
+    <div class="server-phone-money">
+      <div>
+        <span>Total</span>
+        <strong>${formatMoney(getServerTotal(viewedServer.id))}</strong>
+      </div>
+      <div>
+        <span>Reste</span>
+        <strong>${formatMoney(paymentStats.remaining)}</strong>
+      </div>
+    </div>
+
+    <div class="server-phone-actions">
+      ${canOpenTable() && canCurrentUserActOnServer(viewedServer.id)
+      ? `<button type="button" onclick="showCreateTableForm(${viewedServer.id})">Ouvrir table</button>`
+      : ""
+    }
+      ${canCreateInvoice() && canCurrentUserActOnServer(viewedServer.id)
+      ? `<button type="button" class="secondary" onclick="addFloatingInvoice(${viewedServer.id})">Facture volante</button>`
+      : ""
+    }
+    </div>
+
+    <div id="create-table-${viewedServer.id}" class="server-create-table server-phone-create">
+      <input id="new-table-name-${viewedServer.id}" placeholder="Nom de la table..." />
+      <button type="button" onclick="addTable(${viewedServer.id})">Ouvrir</button>
+      <button type="button" class="secondary" onclick="closeCreateTableForm(${viewedServer.id})">Annuler</button>
+    </div>
+
+    <div class="server-phone-list">
+      ${renderServerPhoneTablesHtml(viewedServer.id, serverTables)}
+      ${renderServerPhoneFloatingHtml(viewedServer.id, floatingInvoices)}
+    </div>
+  `;
+
+  grid.appendChild(shell);
+}
+
+function renderServerPhoneTablesHtml(serverId, serverTables) {
+  if (!serverTables.length) {
+    return `
+      <div class="server-phone-empty">
+        Aucune table ouverte.
+        ${canOpenTable() && canCurrentUserActOnServer(serverId)
+        ? `<button type="button" class="small" onclick="showCreateTableForm(${serverId})">Ouvrir une table</button>`
+        : ""
+      }
+      </div>
+    `;
+  }
+
+  return serverTables
+    .map((table) => {
+      const tableInvoices = invoices.filter((invoice) => {
+        return invoice.tableId === table.id && getServerIdFromInvoice(invoice) === serverId;
+      });
+
+      return `
+        <article class="server-phone-table">
+          <div class="server-phone-table-head">
+            <div>
+              <span>Table</span>
+              <strong>${escapeHtml(table.name)}</strong>
+            </div>
+            <button type="button" class="small" onclick="showCreateInvoiceForm(${table.id})">+ Facture</button>
+          </div>
+
+          <div id="create-invoice-${table.id}" class="invoice-create-inline server-phone-create">
+            <input id="new-invoice-name-${table.id}" placeholder="Nom facture optionnel..." />
+            <button type="button" onclick="addInvoiceToTable(${table.id})">Créer</button>
+            <button type="button" class="secondary" onclick="closeCreateInvoiceForm(${table.id})">Annuler</button>
+          </div>
+
+          <div class="server-phone-invoices">
+            ${renderServerPhoneInvoicesHtml(tableInvoices)}
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderServerPhoneFloatingHtml(serverId, floatingInvoices) {
+  if (!floatingInvoices.length) return "";
+
+  return `
+    <article class="server-phone-table floating">
+      <div class="server-phone-table-head">
+        <div>
+          <span>Sans table</span>
+          <strong>Factures volantes</strong>
+        </div>
+        <button type="button" class="small secondary" onclick="addFloatingInvoice(${serverId})">+</button>
+      </div>
+
+      <div class="server-phone-invoices">
+        ${renderServerPhoneInvoicesHtml(floatingInvoices)}
+      </div>
+    </article>
+  `;
+}
+
+function renderServerPhoneInvoicesHtml(list) {
+  if (!list.length) {
+    return `<div class="server-phone-empty compact">Aucune facture.</div>`;
+  }
+
+  return list
+    .slice()
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .map((invoice) => {
+      const selected = selectedInvoiceId === invoice.id;
+      const items = invoice.items || [];
+
+      return `
+        <button type="button" class="server-phone-invoice ${selected ? "selected" : ""}" onclick="selectInvoice(${invoice.id})">
+          <div class="server-phone-invoice-head">
+            <strong>${escapeHtml(getInvoiceName(invoice))}</strong>
+            <span>${formatMoney(getInvoiceTotal(invoice))}</span>
+          </div>
+          <div class="server-phone-item-preview">
+            ${items.length
+          ? items
+            .slice(0, 4)
+            .map((item) => {
+              return `
+                    <span>
+                      ${escapeHtml(item.name)}
+                      <em>x${item.quantity} - ${formatMoney(item.unitPrice)}</em>
+                    </span>
+                  `;
+            })
+            .join("")
+          : `<span>Aucun article</span>`
+        }
+          </div>
+          <div class="server-phone-status ${getPaymentClass(invoice)}">
+            ${getPaymentStatusLabel(invoice)}
+          </div>
+        </button>
+      `;
+    })
+    .join("");
 }
 
 function renderTablesForServer(serverId, serverTables) {
@@ -1543,7 +2039,7 @@ function renderTablesForServer(serverId, serverTables) {
               ${getServerOptionsHtml(table.responsibleUserId)}
             </select>
 
-            <button class="small secondary" onclick="moveTableToServer(${table.id})">
+            <button type="button" class="small secondary" onclick="moveTableToServer(${table.id})">
               Transférer
             </button>
           </div>
@@ -1561,12 +2057,12 @@ function renderTablesForServer(serverId, serverTables) {
 
         <div class="table-actions">
           ${canCreateInvoice() && canActHere
-        ? `<button class="small" onclick="showCreateInvoiceForm(${table.id})">+ Facture</button>`
+        ? `<button type="button" class="small" onclick="showCreateInvoiceForm(${table.id})">+ Facture</button>`
         : ""
       }
 
           ${canCloseTable()
-        ? `<button class="danger small" onclick="askDeleteTable(${table.id})">Fermer</button>`
+        ? `<button type="button" class="danger small" onclick="askDeleteTable(${table.id})">Fermer</button>`
         : ""
       }
         </div>
@@ -1576,8 +2072,8 @@ function renderTablesForServer(serverId, serverTables) {
 
       <div id="create-invoice-${table.id}" class="invoice-create-inline">
         <input id="new-invoice-name-${table.id}" placeholder="Nom facture optionnel..." />
-        <button onclick="addInvoiceToTable(${table.id})">Créer</button>
-        <button class="secondary" onclick="closeCreateInvoiceForm(${table.id})">Annuler</button>
+        <button type="button" onclick="addInvoiceToTable(${table.id})">Créer</button>
+        <button type="button" class="secondary" onclick="closeCreateInvoiceForm(${table.id})">Annuler</button>
       </div>
 
       <div id="invoice-stack-${table.id}" class="invoices-stack"></div>
@@ -1620,7 +2116,7 @@ function renderInvoicesStack(containerId, list) {
       `;
 
       card.innerHTML = `
-        <button class="split-invoice-button" onclick="selectInvoice(${invoice.id})">
+        <button type="button" class="split-invoice-button" onclick="selectInvoice(${invoice.id})">
           <div class="split-invoice-main">
             <strong>${escapeHtml(getInvoiceName(invoice))}</strong>
             <span>
@@ -1677,7 +2173,7 @@ function renderInvoiceDetailPanel() {
         .map((table) => `<option value="${table.id}">${escapeHtml(table.name)}</option>`)
         .join("")}
           </select>
-          <button class="small" onclick="attachFloatingInvoiceToTable(${invoice.id})">Ajouter</button>
+          <button type="button" class="small" onclick="attachFloatingInvoiceToTable(${invoice.id})">Ajouter</button>
         </div>
       `
       : "";
@@ -1692,7 +2188,7 @@ function renderInvoiceDetailPanel() {
             ${getTableOptionsHtml(invoice.tableId, invoice.responsibleUserId)}
           </select>
 
-          <button class="small secondary" onclick="moveInvoiceToTable(${invoice.id})">
+          <button type="button" class="small secondary" onclick="moveInvoiceToTable(${invoice.id})">
             Déplacer
           </button>
         </div>
@@ -1708,7 +2204,7 @@ function renderInvoiceDetailPanel() {
             ${getServerOptionsHtml(invoice.responsibleUserId)}
           </select>
 
-          <button class="small secondary" onclick="moveInvoiceToServer(${invoice.id})">
+          <button type="button" class="small secondary" onclick="moveInvoiceToServer(${invoice.id})">
             Transférer
           </button>
         </div>
@@ -1780,38 +2276,38 @@ function renderInvoiceDetailPanel() {
 
       <div class="payment-actions">
         ${canSetPayment() && canAct
-      ? `<button class="small" onclick="setInvoicePayment(${invoice.id})" ${locked ? "disabled" : ""}>
+      ? `<button type="button" class="small" onclick="setInvoicePayment(${invoice.id})" ${locked ? "disabled" : ""}>
                 Enregistrer règlement
               </button>`
       : ""
     }
 
         ${canSetFullCardPayment() && canAct
-      ? `<button class="small secondary" onclick="markInvoicePaidByCard(${invoice.id})" ${locked ? "disabled" : ""}>
+      ? `<button type="button" class="small secondary" onclick="markInvoicePaidByCard(${invoice.id})" ${locked ? "disabled" : ""}>
                 Tout CB
               </button>`
       : ""
     }
 
         ${canSetFullCashPayment() && canAct
-      ? `<button class="small secondary" onclick="markInvoicePaidByCash(${invoice.id})" ${locked ? "disabled" : ""}>
+      ? `<button type="button" class="small secondary" onclick="markInvoicePaidByCash(${invoice.id})" ${locked ? "disabled" : ""}>
                 Tout espèces
               </button>`
       : ""
     }
 
         ${canResetPayment()
-      ? `<button class="small secondary" onclick="resetInvoicePayment(${invoice.id})" ${locked ? "disabled" : ""}>
+      ? `<button type="button" class="small secondary" onclick="resetInvoicePayment(${invoice.id})" ${locked ? "disabled" : ""}>
                 Reset
               </button>`
       : ""
     }
 
         ${canValidatePayment()
-      ? `<button class="small" onclick="validateInvoicePaid(${invoice.id})" ${locked ? "disabled" : ""}>
+      ? `<button type="button" class="small" onclick="validateInvoicePaid(${invoice.id})" ${locked ? "disabled" : ""}>
                 Clôturer réglée
               </button>`
-      : `<button class="small" disabled title="Réservé caisse / manager / admin">
+      : `<button type="button" class="small" disabled title="Réservé caisse / manager / admin">
                 Clôture réservée
               </button>`
     }
@@ -1842,7 +2338,7 @@ function renderInvoiceDetailPanel() {
                 ${canOverrideInvoiceItemPrice() ? "" : "disabled"}
               />
 
-              <button onclick="addItem(${invoice.id})">Ajouter</button>
+              <button type="button" onclick="addItem(${invoice.id})">Ajouter</button>
             </div>
           `
       : ""
@@ -1856,17 +2352,13 @@ function renderInvoiceDetailPanel() {
     ${canCancelInvoice()
       ? `<div class="detail-section">
             <h3>Actions sensibles</h3>
-            <button class="danger" onclick="askDeleteInvoice(${invoice.id})" ${locked ? "disabled" : ""}>
+            <button type="button" class="danger" onclick="askDeleteInvoice(${invoice.id})" ${locked ? "disabled" : ""}>
               Annuler facture
             </button>
           </div>`
       : ""
     }
 
-    <div class="detail-section">
-      <h3>Historique</h3>
-      ${renderInvoiceLogsHtml()}
-    </div>
   `;
 }
 
@@ -1893,9 +2385,9 @@ function renderItemsHtml(invoice) {
           />
 
           <div class="qty-control">
-            <button class="small secondary" onclick="changeItemQuantity(${invoice.id}, ${item.id}, -1)" ${locked || !canEditItemQuantity() || !canAct ? "disabled" : ""}>-</button>
+            <button type="button" class="small secondary" onclick="changeItemQuantity(${invoice.id}, ${item.id}, -1)" ${locked || !canEditItemQuantity() || !canAct ? "disabled" : ""}>-</button>
             <div class="qty-value">${item.quantity}</div>
-            <button class="small secondary" onclick="changeItemQuantity(${invoice.id}, ${item.id}, 1)" ${locked || !canEditItemQuantity() || !canAct ? "disabled" : ""}>+</button>
+            <button type="button" class="small secondary" onclick="changeItemQuantity(${invoice.id}, ${item.id}, 1)" ${locked || !canEditItemQuantity() || !canAct ? "disabled" : ""}>+</button>
           </div>
 
           <input
@@ -1910,7 +2402,7 @@ function renderItemsHtml(invoice) {
           <div class="item-total">
             ${formatMoney(total)}
             ${!locked && canDeleteItem() && canAct
-          ? `<button class="danger small" onclick="deleteItem(${invoice.id}, ${item.id})">x</button>`
+          ? `<button type="button" class="danger small" onclick="deleteItem(${invoice.id}, ${item.id})">x</button>`
           : ""
         }
           </div>
@@ -1950,6 +2442,75 @@ function renderInvoiceLogsHtml() {
   `;
 }
 
+function canOpenServiceHistory() {
+  if (typeof canViewActivityLogs === "function") {
+    return canViewActivityLogs();
+  }
+
+  return ["ADMIN", "MANAGER", "CAISSE"].includes(currentUserRole());
+}
+
+async function openServiceHistory() {
+  if (!canOpenServiceHistory()) {
+    showToast("Historique reserve a la caisse et aux responsables.", "error");
+    return;
+  }
+
+  const overlay = document.getElementById("historyOverlay");
+  const list = document.getElementById("historyList");
+  if (!overlay || !list) return;
+
+  overlay.classList.add("active");
+  list.innerHTML = `<div class="empty-zone">Chargement de l'historique...</div>`;
+
+  try {
+    await loadServiceLogs();
+    renderServiceHistory();
+  } catch (error) {
+    serviceLogs = [];
+    list.innerHTML = `<div class="empty-zone">Historique indisponible.</div>`;
+    showError(error);
+  }
+}
+
+function closeServiceHistory() {
+  const overlay = document.getElementById("historyOverlay");
+  if (overlay) {
+    overlay.classList.remove("active");
+  }
+}
+
+function renderServiceHistory() {
+  const list = document.getElementById("historyList");
+  if (!list) return;
+
+  if (!serviceLogs.length) {
+    list.innerHTML = `<div class="empty-zone">Aucune action serveur pour le moment.</div>`;
+    return;
+  }
+
+  list.innerHTML = serviceLogs
+    .map((log) => {
+      const meta = [
+        log.actorUser?.name || "Utilisateur inconnu",
+        log.table?.name ? `Table ${log.table.name}` : "",
+        log.invoice?.name || (log.invoiceId ? `Facture #${log.invoiceId}` : ""),
+        formatDateTime(log.createdAt),
+      ].filter(Boolean);
+
+      return `
+        <div class="history-row">
+          <div>
+            <strong>${escapeHtml(getActionLabel(log.action))}</strong>
+            <div class="table-meta">${escapeHtml(meta.join(" - "))}</div>
+            ${log.details ? `<div class="table-meta">${escapeHtml(log.details)}</div>` : ""}
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 /* -------------------- RECAP PAGE -------------------- */
 
 async function renderRecapPage() {
@@ -1972,7 +2533,7 @@ async function renderRecapPage() {
             —
             ${escapeHtml(user.role)}
           </span>
-          <button class="small secondary" onclick="logout()">Déconnexion</button>
+          <button type="button" class="small secondary" onclick="logout()">Déconnexion</button>
         </div>
       `;
     }
@@ -2197,4 +2758,324 @@ async function downloadRecapPdf() {
   } catch (error) {
     showError(error);
   }
+}
+
+/* -------------------- SERVER PHONE ACCORDION OVERRIDES -------------------- */
+
+function renderServerPhoneTablesHtml(serverId, serverTables) {
+  if (!serverTables.length) {
+    return `<div class="server-phone-empty">Aucune table ouverte.</div>`;
+  }
+
+  return serverTables
+    .map((table) => {
+      const tableKey = `table-${table.id}`;
+      const open = getOpenServerPhoneTable() === tableKey;
+      const tableInvoices = invoices.filter((invoice) => {
+        return invoice.tableId === table.id && getServerIdFromInvoice(invoice) === serverId;
+      });
+      const tableTotal = tableInvoices.reduce((sum, invoice) => {
+        return sum + getInvoiceTotal(invoice);
+      }, 0);
+
+      return `
+        <article class="server-phone-table ${open ? "open" : ""}">
+          <div class="server-phone-table-head" onclick="toggleServerPhoneTable('${tableKey}')">
+            <div>
+              <span>Table</span>
+              <strong>${escapeHtml(table.name)}</strong>
+              <em>${tableInvoices.length} facture(s) - ${formatMoney(tableTotal)}</em>
+            </div>
+            <div class="server-phone-head-actions">
+              <span class="server-phone-chevron">${open ? "Fermer" : "Ouvrir"}</span>
+              <button type="button" class="small" onclick="event.stopPropagation(); showCreateInvoiceForm(${table.id})">+ Facture</button>
+            </div>
+          </div>
+
+          <div id="create-invoice-${table.id}" class="invoice-create-inline server-phone-create">
+            <input id="new-invoice-name-${table.id}" placeholder="Nom facture optionnel..." />
+            <button type="button" onclick="addInvoiceToTable(${table.id})">Créer</button>
+            <button type="button" class="secondary" onclick="closeCreateInvoiceForm(${table.id})">Annuler</button>
+          </div>
+
+          ${open
+          ? `
+              <div class="server-phone-invoices">
+                ${renderServerPhoneInvoicesHtml(tableInvoices, tableKey)}
+              </div>
+            `
+          : ""
+        }
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderServerPhoneFloatingHtml(serverId, floatingInvoices) {
+  if (!floatingInvoices.length) return "";
+
+  const tableKey = "floating";
+  const open = getOpenServerPhoneTable() === tableKey;
+  const floatingTotal = floatingInvoices.reduce((sum, invoice) => {
+    return sum + getInvoiceTotal(invoice);
+  }, 0);
+
+  return `
+    <article class="server-phone-table floating ${open ? "open" : ""}">
+      <div class="server-phone-table-head" onclick="toggleServerPhoneTable('${tableKey}')">
+        <div>
+          <span>Sans table</span>
+          <strong>Factures volantes</strong>
+          <em>${floatingInvoices.length} facture(s) - ${formatMoney(floatingTotal)}</em>
+        </div>
+        <div class="server-phone-head-actions">
+          <span class="server-phone-chevron">${open ? "Fermer" : "Ouvrir"}</span>
+          <button type="button" class="small secondary" onclick="event.stopPropagation(); addFloatingInvoice(${serverId})">+</button>
+        </div>
+      </div>
+
+      ${open
+      ? `
+          <div class="server-phone-invoices">
+            ${renderServerPhoneInvoicesHtml(floatingInvoices, tableKey)}
+          </div>
+        `
+      : ""
+    }
+    </article>
+  `;
+}
+
+function renderServerPhoneInvoicesHtml(list, tableKey) {
+  if (!list.length) {
+    const tableId = String(tableKey || "").startsWith("table-")
+      ? Number(String(tableKey).replace("table-", ""))
+      : null;
+
+    return `
+      <div class="server-phone-empty compact">
+        Aucune facture.
+        ${tableId ? `<button type="button" class="small" onclick="showCreateInvoiceForm(${tableId})">Créer une facture</button>` : ""}
+      </div>
+    `;
+  }
+
+  return list
+    .slice()
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .map((invoice) => {
+      const selected = getOpenServerPhoneInvoiceId() === invoice.id;
+      const items = invoice.items || [];
+
+      return `
+        <article id="server-phone-invoice-${invoice.id}" class="server-phone-invoice ${selected ? "selected" : ""}">
+          <button type="button" class="server-phone-invoice-toggle" onclick="toggleServerPhoneInvoice(${invoice.id}, '${tableKey}')">
+            <div class="server-phone-invoice-head">
+              <strong>${escapeHtml(getInvoiceName(invoice))}</strong>
+              <span id="server-phone-invoice-total-${invoice.id}">${formatMoney(getInvoiceTotal(invoice))}</span>
+            </div>
+
+            <div class="server-phone-invoice-recap">
+              <span id="server-phone-invoice-count-${invoice.id}">${items.length} article(s)</span>
+              <span>${formatTime(invoice.createdAt)}</span>
+            </div>
+
+            <div class="server-phone-invoice-foot">
+              <span id="server-phone-invoice-status-${invoice.id}" class="server-phone-status ${getPaymentClass(invoice)}">
+                ${getPaymentStatusLabel(invoice)}
+              </span>
+              <span class="server-phone-chevron">${selected ? "Masquer" : "Détails"}</span>
+            </div>
+          </button>
+
+          ${selected ? renderServerPhoneInvoiceControls(invoice) : ""}
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderServerPhoneInvoiceControls(invoice) {
+  const locked = isInvoiceLocked(invoice);
+  const canAct = canActOnInvoice(invoice);
+
+  return `
+    <div class="server-phone-invoice-body">
+      <section class="server-phone-panel">
+        <div class="server-phone-panel-title">
+          <strong>Articles</strong>
+          <span id="server-phone-article-total-${invoice.id}">${formatMoney(getInvoiceTotal(invoice))}</span>
+        </div>
+
+        ${locked
+      ? `<div class="server-phone-locked">Facture réglée : les articles sont verrouillés.</div>`
+      : ""
+    }
+
+        ${!locked && canAddItem() && canAct
+      ? `
+          ${renderServerPhoneProductPicker(invoice.id)}
+
+          <div class="server-phone-add-item">
+            <input
+              id="item-name-${invoice.id}"
+              list="products-list-${invoice.id}"
+              placeholder="Article..."
+              oninput="fillProductPrice(${invoice.id})"
+            />
+
+            ${renderProductsDatalist(invoice.id)}
+
+            <input
+              id="item-price-${invoice.id}"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="${canOverrideInvoiceItemPrice() ? "Prix" : "Auto"}"
+              ${canOverrideInvoiceItemPrice() ? "" : "disabled"}
+            />
+
+            <button type="button" onclick="addItem(${invoice.id})">Ajouter</button>
+          </div>
+        `
+      : ""
+    }
+
+        <div id="server-phone-items-${invoice.id}" class="server-phone-items">
+          ${renderServerPhoneItemsHtml(invoice)}
+        </div>
+      </section>
+
+      <section class="server-phone-panel">
+        <div class="server-phone-panel-title">
+          <strong>Règlement</strong>
+          <span id="server-phone-remaining-${invoice.id}">Reste ${formatMoney(getInvoiceRemaining(invoice))}</span>
+        </div>
+
+        <div id="server-phone-payment-summary-${invoice.id}" class="server-phone-payment-summary">
+          <span>CB ${formatMoney(getInvoiceCardPaid(invoice))}</span>
+          <span>Espèces ${formatMoney(getInvoiceCashPaid(invoice))}</span>
+        </div>
+
+        <div class="server-phone-payment-inputs">
+          <input
+            id="card-paid-${invoice.id}"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="CB"
+            value="${getInvoiceCardPaid(invoice)}"
+            ${locked || !canSetPayment() || !canAct ? "disabled" : ""}
+          />
+
+          <input
+            id="cash-paid-${invoice.id}"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="Espèces"
+            value="${getInvoiceCashPaid(invoice)}"
+            ${locked || !canSetPayment() || !canAct ? "disabled" : ""}
+          />
+        </div>
+
+        <div class="server-phone-payment-actions">
+          ${canSetPayment() && canAct
+      ? `<button type="button" class="small" onclick="setInvoicePayment(${invoice.id})" ${locked ? "disabled" : ""}>Enregistrer</button>`
+      : ""
+    }
+          ${canSetFullCardPayment() && canAct
+      ? `<button type="button" class="small secondary" onclick="markInvoicePaidByCard(${invoice.id})" ${locked ? "disabled" : ""}>Tout CB</button>`
+      : ""
+    }
+          ${canSetFullCashPayment() && canAct
+      ? `<button type="button" class="small secondary" onclick="markInvoicePaidByCash(${invoice.id})" ${locked ? "disabled" : ""}>Tout espèces</button>`
+      : ""
+    }
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderServerPhoneProductPicker(invoiceId) {
+  if (!products.length) return "";
+
+  const activeCategory = getServerPhoneCategory(invoiceId);
+  const categories = getProductCategories();
+  const visibleProducts = products
+    .filter((product) => {
+      if (activeCategory === "all") return true;
+      return (product.category || "Sans catégorie") === activeCategory;
+    })
+    .slice(0, 12);
+
+  return `
+    <div class="server-phone-products">
+      <div class="server-phone-category-tabs">
+        ${categories
+      .map((category) => {
+        const active = category === activeCategory;
+        const label = category === "all" ? "Tous" : category;
+
+        return `
+            <button
+              type="button"
+              class="server-phone-category ${active ? "active" : ""}"
+              onclick="setServerPhoneCategory(${invoiceId}, '${escapeJsString(category)}')"
+            >
+              ${escapeHtml(label)}
+            </button>
+          `;
+      })
+      .join("")}
+      </div>
+
+      <div class="server-phone-product-grid">
+        ${visibleProducts
+      .map((product) => {
+        return `
+            <button type="button" class="server-phone-product" onclick="quickAddProductToInvoice(${invoiceId}, ${product.id})">
+              <strong>${escapeHtml(product.name)}</strong>
+              <span>${formatMoney(product.price)}</span>
+            </button>
+          `;
+      })
+      .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderServerPhoneItemsHtml(invoice) {
+  const items = invoice.items || [];
+
+  if (!items.length) {
+    return `<div class="server-phone-empty compact">Aucun article.</div>`;
+  }
+
+  const locked = isInvoiceLocked(invoice);
+  const canAct = canActOnInvoice(invoice);
+
+  return items
+    .map((item) => {
+      const total = Number(item.quantity) * Number(item.unitPrice);
+
+      return `
+        <div class="server-phone-item-row">
+          <div>
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${formatMoney(item.unitPrice)} - Total ${formatMoney(total)}</span>
+          </div>
+
+          <div class="server-phone-qty">
+            <button type="button" class="small secondary" onclick="changeItemQuantity(${invoice.id}, ${item.id}, -1)" ${locked || !canEditItemQuantity() || !canAct ? "disabled" : ""}>-</button>
+            <span>${item.quantity}</span>
+            <button type="button" class="small secondary" onclick="changeItemQuantity(${invoice.id}, ${item.id}, 1)" ${locked || !canEditItemQuantity() || !canAct ? "disabled" : ""}>+</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
 }

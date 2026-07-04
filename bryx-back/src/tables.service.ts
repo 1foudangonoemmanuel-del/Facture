@@ -82,7 +82,19 @@ export class TablesService {
             actorUserId?: number;
         },
     ) {
-        await this.findOne(id);
+        const existingTable = await this.findOne(id);
+
+        if (data.status === 'CLOSED') {
+            const openInvoices = existingTable.invoices.filter((invoice) => {
+                return invoice.status !== 'PAID' && invoice.status !== 'CANCELLED';
+            });
+
+            if (openInvoices.length) {
+                throw new BadRequestException(
+                    'Impossible de fermer une table avec des factures ouvertes',
+                );
+            }
+        }
 
         const table = await this.prisma.table.update({
             where: { id },

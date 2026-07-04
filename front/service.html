@@ -38,8 +38,8 @@
   </main>
 
   <div id="serverContextMenu" class="context-menu">
-    <button onclick="contextAddFloatingInvoice()">Nouvelle facture volante</button>
-    <button onclick="contextAddTable()">Ouvrir nouvelle table</button>
+    <button type="button" onclick="contextAddFloatingInvoice()">Nouvelle facture volante</button>
+    <button type="button" onclick="contextAddTable()">Ouvrir nouvelle table</button>
   </div>
 
   <div id="confirmOverlay" class="modal-overlay">
@@ -48,8 +48,20 @@
       <p id="confirmText">Action à confirmer.</p>
 
       <div class="modal-actions">
-        <button class="secondary" onclick="closeConfirmModal()">Annuler</button>
-        <button class="danger" id="confirmButton">Confirmer</button>
+        <button type="button" class="secondary" onclick="closeConfirmModal()">Annuler</button>
+        <button type="button" class="danger" id="confirmButton">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="historyOverlay" class="modal-overlay">
+    <div class="modal-box history-modal">
+      <div class="history-modal-header">
+        <h2>Historique service</h2>
+        <button type="button" class="small secondary" onclick="closeServiceHistory()">Fermer</button>
+      </div>
+      <div id="historyList" class="history-list">
+        <div class="empty-zone">Aucune action serveur pour le moment.</div>
       </div>
     </div>
   </div>

@@ -14,6 +14,9 @@ export class UsersService {
 
     findAll() {
         return this.prisma.user.findMany({
+            omit: {
+                pin: true,
+            },
             orderBy: [
                 {
                     role: 'asc',
@@ -28,6 +31,9 @@ export class UsersService {
     async findOne(id: number) {
         const user = await this.prisma.user.findUnique({
             where: { id },
+            omit: {
+                pin: true,
+            },
         });
 
         if (!user) {
@@ -77,7 +83,9 @@ export class UsersService {
             details: `Création utilisateur ${user.name} avec rôle ${user.role}`,
         });
 
-        return user;
+        const { pin: _pin, ...safeUser } = user;
+
+        return safeUser;
     }
 
     async updateRole(
@@ -108,7 +116,9 @@ export class UsersService {
             details: `Rôle de ${user.name} modifié : ${user.role} → ${data.role}`,
         });
 
-        return updated;
+        const { pin: _pin, ...safeUser } = updated;
+
+        return safeUser;
     }
 
     async blockUser(id: number, actorUserId?: number) {
@@ -130,7 +140,9 @@ export class UsersService {
             details: `Compte bloqué : ${user.name}`,
         });
 
-        return updated;
+        const { pin: _pin, ...safeUser } = updated;
+
+        return safeUser;
     }
 
     async unblockUser(id: number, actorUserId?: number) {
@@ -152,7 +164,9 @@ export class UsersService {
             details: `Compte débloqué : ${user.name}`,
         });
 
-        return updated;
+        const { pin: _pin, ...safeUser } = updated;
+
+        return safeUser;
     }
 
     async deleteUser(id: number, actorUserId?: number) {
