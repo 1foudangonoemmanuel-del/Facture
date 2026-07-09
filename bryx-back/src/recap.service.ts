@@ -88,6 +88,10 @@ export class RecapService {
             return sum + row.total;
         }, 0);
 
+        const medianTicket = this.getMedian(
+            invoiceTotals.map((row) => row.total),
+        );
+
         const totalBrut = invoiceTotals.reduce((sum, row) => {
             return sum + row.grossTotal;
         }, 0);
@@ -159,6 +163,7 @@ export class RecapService {
                 totalBrut,
                 totalRemise,
                 totalFacture,
+                medianTicket,
                 totalEspeces,
                 totalCarte,
                 totalRegle,
@@ -216,6 +221,19 @@ export class RecapService {
                 : 0;
 
         return Math.min(grossTotal, amountDiscount + percentDiscount);
+    }
+
+    private getMedian(values: number[]) {
+        if (!values.length) return 0;
+
+        const sorted = values.slice().sort((a, b) => a - b);
+        const middle = Math.floor(sorted.length / 2);
+
+        if (sorted.length % 2 === 1) {
+            return sorted[middle];
+        }
+
+        return (sorted[middle - 1] + sorted[middle]) / 2;
     }
 
     private getTodayBounds() {

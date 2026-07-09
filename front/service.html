@@ -7,7 +7,7 @@
 
   <title>Service - BRYX</title>
 
-  <link rel="stylesheet" href="style.css?v=20260704-3" />
+  <link rel="stylesheet" href="style.css?v=20260709-theme" />
 </head>
 
 <body>
@@ -67,16 +67,18 @@
   </div>
 
   <div id="toast" class="toast"></div>
+  <div id="serviceConnectionBadge" class="service-connection-badge"></div>
 
-  <script src="config.js?v=20260704-3"></script>
-  <script src="auth.js?v=20260704-3"></script>
-  <script src="permissions.js?v=20260704-3"></script>
-  <script src="script.js?v=20260704-3"></script>
+  <script src="config.js?v=20260709-keep"></script>
+  <script src="auth.js?v=20260709-keep"></script>
+  <script src="permissions.js?v=20260709-keep"></script>
+  <script src="script.js?v=20260709-theme"></script>
   <script>
     requireRole(["SERVER", "CAISSE", "MANAGER", "ADMIN"]);
     injectRoleNav();
     injectCurrentUserBar();
     renderServicePage();
+    startServiceAutoRefresh();
   </script>
 
 </body>

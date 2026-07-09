@@ -6,6 +6,9 @@ let invoices = [];
 let products = [];
 let invoiceLogs = [];
 let serviceLogs = [];
+let serviceAutoRefreshTimer = null;
+let serviceRefreshInFlight = false;
+let serviceConnectionState = "online";
 
 let selectedInvoiceId =
   Number(localStorage.getItem("bryx_selected_invoice_backend")) || null;
@@ -133,6 +136,54 @@ async function loadServiceData() {
 
 async function loadServiceLogs() {
   serviceLogs = await apiGet("/activity-logs");
+}
+
+function isServicePageActive() {
+  return Boolean(document.getElementById("serviceGrid"));
+}
+
+function isEditingServiceInput() {
+  const active = document.activeElement;
+  if (!active) return false;
+
+  return ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
+}
+
+function startServiceAutoRefresh() {
+  if (serviceAutoRefreshTimer || !isServicePageActive()) return;
+
+  serviceAutoRefreshTimer = setInterval(refreshServiceDataSilently, 3000);
+}
+
+async function refreshServiceDataSilently() {
+  if (!isServicePageActive() || serviceRefreshInFlight) return;
+
+  const user = currentUser();
+  if (!user) return;
+
+  serviceRefreshInFlight = true;
+
+  try {
+    await loadServiceData();
+    tables = tables.filter((table) => table.status !== "CANCELLED" && table.status !== "CLOSED");
+    invoices = invoices.filter((invoice) => invoice.status !== "CANCELLED");
+    clearSelectedInvoiceIfMissing();
+    setServiceConnectionState("online");
+
+    if (isEditingServiceInput()) return;
+
+    if (user.role === "SERVER") {
+      renderServerPhonePage(user, getVisibleServersForCurrentUser());
+      return;
+    }
+
+    await renderServicePage({ skipLoad: true });
+  } catch (error) {
+    console.error(error);
+    setServiceConnectionState("offline", "Connexion perdue - tentative de reconnexion...");
+  } finally {
+    serviceRefreshInFlight = false;
+  }
 }
 
 /* -------------------- HELPERS -------------------- */
@@ -388,11 +439,52 @@ function normalizeText(value) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function phoneticProductKey(value) {
+  return normalizeText(value)
+    .replace(/œ/g, "oe")
+    .replace(/ph/g, "f")
+    .replace(/ch/g, "sh")
+    .replace(/c(?=[eiy])/g, "s")
+    .replace(/[ckq]/g, "k")
+    .replace(/g(?=[eiy])/g, "j")
+    .replace(/ou/g, "u")
+    .replace(/eau/g, "o")
+    .replace(/au/g, "o")
+    .replace(/ai|ei|ay|ey/g, "e")
+    .replace(/an|am|en|em/g, "an")
+    .replace(/in|im|ain|aim|ein|eim|yn|ym/g, "in")
+    .replace(/on|om/g, "on")
+    .replace(/s(?=[aeiouy])/g, "z")
+    .replace(/[^a-z0-9]/g, "")
+    .replace(/(.)\1+/g, "$1");
+}
+
 function findProductByName(name) {
   const clean = normalizeText(name);
+  const phonetic = phoneticProductKey(name);
+
+  const exact = products.find((product) => {
+    return normalizeText(product.name) === clean;
+  });
+
+  if (exact) return exact;
+
+  const phoneticMatch = products.find((product) => {
+    return phoneticProductKey(product.name) === phonetic;
+  });
+
+  if (phoneticMatch) return phoneticMatch;
 
   return products.find((product) => {
-    return normalizeText(product.name) === clean;
+    const productClean = normalizeText(product.name);
+    const productPhonetic = phoneticProductKey(product.name);
+    return (
+      clean.length >= 3 &&
+      (productClean.includes(clean) ||
+        clean.includes(productClean) ||
+        productPhonetic.includes(phonetic) ||
+        phonetic.includes(productPhonetic))
+    );
   });
 }
 
@@ -759,7 +851,7 @@ function showToast(message, type = "success") {
 function showError(error) {
   console.error(error);
 
-  let message = "Erreur.";
+  let message = "Impossible de terminer l'action.";
 
   try {
     const parsed = JSON.parse(error.message);
@@ -768,7 +860,25 @@ function showError(error) {
     message = error.message || message;
   }
 
+  if (
+    message === "Failed to fetch" ||
+    message.includes("NetworkError") ||
+    message.includes("Load failed")
+  ) {
+    message = "Impossible de joindre le serveur pour le moment.";
+  }
+
   showToast(message, "error");
+}
+
+function setServiceConnectionState(state, message = "") {
+  serviceConnectionState = state;
+
+  const badge = document.getElementById("serviceConnectionBadge");
+  if (!badge) return;
+
+  badge.className = `service-connection-badge ${state === "online" ? "" : "visible"} ${state}`;
+  badge.textContent = message || (state === "online" ? "" : "Reconnexion...");
 }
 
 /* -------------------- CONFIRM -------------------- */
@@ -907,7 +1017,7 @@ function contextAddTable() {
 
 function closeAllInlineForms() {
   document
-    .querySelectorAll(".server-create-table.active, .invoice-create-inline.active")
+    .querySelectorAll(".server-create-table.active, .invoice-create-inline.active, .server-keep-create.active")
     .forEach((el) => el.classList.remove("active"));
 }
 
@@ -1644,18 +1754,22 @@ async function validateInvoicePaid(invoiceId) {
 
 /* -------------------- RENDER SERVICE -------------------- */
 
-async function renderServicePage() {
+async function renderServicePage(options = {}) {
   const grid = document.getElementById("serviceGrid");
   if (!grid) return;
 
   const user = ensureConnected();
   if (!user) return;
 
-  try {
-    await loadServiceData();
-  } catch (error) {
-    showError(error);
-    return;
+  if (!options.skipLoad) {
+    try {
+      await loadServiceData();
+      setServiceConnectionState("online");
+    } catch (error) {
+      setServiceConnectionState("offline", "Impossible de joindre le serveur pour le moment.");
+      showError(error);
+      return;
+    }
   }
 
   tables = tables.filter((table) => table.status !== "CANCELLED" && table.status !== "CLOSED");
@@ -1666,6 +1780,7 @@ async function renderServicePage() {
   const visibleServers = getVisibleServersForCurrentUser();
   const serverPhoneMode = user.role === "SERVER";
   document.body.classList.toggle("server-phone-mode", serverPhoneMode);
+  document.body.classList.toggle("server-keep-mode", serverPhoneMode);
   document.body.classList.toggle("has-selected-invoice", Boolean(selectedInvoiceId));
 
   const currentUserBar = document.getElementById("currentUserBar");
@@ -2546,6 +2661,7 @@ async function renderRecapPage() {
     document.getElementById("tableCount").textContent = summary.tableCount;
     document.getElementById("invoiceCount").textContent = summary.invoiceCount;
     document.getElementById("averageTicket").textContent = formatMoney(ticketAverage);
+    document.getElementById("medianTicket").textContent = formatMoney(summary.medianTicket || 0);
 
     document.getElementById("cardPaidTotal").textContent = formatMoney(summary.totalCarte);
     document.getElementById("cashPaidTotal").textContent = formatMoney(summary.totalEspeces);
@@ -2704,6 +2820,7 @@ async function buildRecapMessage() {
     `Espèces : ${formatMoney(s.totalEspeces)}`,
     `Total réglé : ${formatMoney(s.totalRegle)}`,
     `Reste à régler : ${formatMoney(s.resteARegler)}`,
+    `Ticket median : ${formatMoney(s.medianTicket || 0)}`,
     "",
     `Tables : ${s.tableCount}`,
     `Factures : ${s.invoiceCount}`,
@@ -3078,4 +3195,292 @@ function renderServerPhoneItemsHtml(invoice) {
       `;
     })
     .join("");
+}
+
+/* -------------------- SERVER KEEP UX -------------------- */
+
+function getServerKeepViewedServer(user, visibleServers) {
+  const viewedServerId = getServerPhoneViewId(user, visibleServers);
+  return visibleServers.find((server) => server.id === viewedServerId) || visibleServers[0] || null;
+}
+
+function getServerKeepInvoices(serverId) {
+  return invoices
+    .filter((invoice) => getServerIdFromInvoice(invoice) === serverId)
+    .filter((invoice) => invoice.status !== "CANCELLED")
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+}
+
+function getInvoiceKeepTitle(invoice) {
+  const tableName = invoice.tableId ? getTableNameById(invoice.tableId) : "Facture volante";
+  const invoiceName = getInvoiceName(invoice);
+  return invoiceName === tableName ? tableName : `${tableName} - ${invoiceName}`;
+}
+
+function getServerKeepPreview(invoice) {
+  const items = invoice.items || [];
+  if (!items.length) return `<span>Aucune commande.</span>`;
+
+  return items
+    .slice(0, 4)
+    .map((item) => `<span>${item.quantity} ${escapeHtml(item.name)}</span>`)
+    .join("");
+}
+
+function getServerKeepStatus(invoice) {
+  const status = getInvoicePaymentStatus(invoice);
+  if (status === "paid") return "Reglee";
+  if (status === "partial") return "Paiement en cours";
+  return "Ouverte";
+}
+
+function openServerKeepInvoice(invoiceId) {
+  selectedInvoiceId = invoiceId;
+  localStorage.setItem("bryx_selected_invoice_backend", String(invoiceId));
+  renderServerPhonePageFromState();
+}
+
+function backToServerKeepList() {
+  selectedInvoiceId = null;
+  localStorage.removeItem("bryx_selected_invoice_backend");
+  renderServerPhonePageFromState();
+}
+
+function renderServerPhoneInvoiceFromState(invoiceId, options = {}) {
+  const user = currentUser();
+
+  if (user?.role === "SERVER") {
+    renderServerPhonePageFromState();
+
+    if (options.syncPaymentInputs) {
+      const nameInput = document.getElementById(`item-name-${invoiceId}`);
+      if (nameInput) nameInput.focus();
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+function renderServerPhonePage(user, visibleServers) {
+  const grid = document.getElementById("serviceGrid");
+  if (!grid) return;
+
+  const viewedServer = getServerKeepViewedServer(user, visibleServers);
+
+  document.body.classList.add("server-phone-mode", "server-keep-mode");
+  document.body.classList.toggle("has-selected-invoice", Boolean(selectedInvoiceId));
+
+  grid.innerHTML = "";
+  grid.className = "service-grid server-keep-grid";
+
+  if (!viewedServer) {
+    grid.innerHTML = `<div class="server-keep-empty">Aucun serveur disponible.</div>`;
+    return;
+  }
+
+  const selectedInvoice = invoices.find((invoice) => invoice.id === selectedInvoiceId);
+  const shell = document.createElement("section");
+  shell.className = "server-keep-shell";
+
+  shell.innerHTML = selectedInvoice
+    ? renderServerKeepDetail(user, viewedServer, selectedInvoice)
+    : renderServerKeepList(user, viewedServer, visibleServers);
+
+  grid.appendChild(shell);
+  lockActionButtons(shell);
+}
+
+function renderServerKeepList(user, viewedServer, visibleServers) {
+  const ownView = viewedServer.id === user.id;
+  const serverInvoices = getServerKeepInvoices(viewedServer.id);
+  const openTables = tables.filter((table) => getServerIdFromTable(table) === viewedServer.id);
+  const floatingInvoices = serverInvoices.filter((invoice) => invoice.tableId === null);
+
+  return `
+    <header class="server-keep-header">
+      <div>
+        <span>${ownView ? "Mon service" : "Service consulte"}</span>
+        <strong>${escapeHtml(viewedServer.name)}</strong>
+      </div>
+      <button type="button" class="server-keep-logout" onclick="logout()">Deconnexion</button>
+    </header>
+
+    ${visibleServers.length > 1
+      ? `<label class="server-keep-switch">
+          <span>Voir un autre ecran</span>
+          <select onchange="setServerPhoneView(Number(this.value))">
+            ${visibleServers
+        .map((server) => {
+          return `<option value="${server.id}" ${server.id === viewedServer.id ? "selected" : ""}>
+            ${server.id === user.id ? "Moi - " : ""}${escapeHtml(server.name)}
+          </option>`;
+        })
+        .join("")}
+          </select>
+        </label>`
+      : ""
+    }
+
+    <div class="server-keep-actions">
+      ${canOpenTable() && canCurrentUserActOnServer(viewedServer.id)
+      ? `<button type="button" onclick="showCreateTableForm(${viewedServer.id})">Nouvelle table</button>`
+      : ""
+    }
+      ${canCreateInvoice() && canCurrentUserActOnServer(viewedServer.id)
+      ? `<button type="button" class="secondary" onclick="addFloatingInvoice(${viewedServer.id})">Facture volante</button>`
+      : ""
+    }
+    </div>
+
+    <div id="create-table-${viewedServer.id}" class="server-keep-create">
+      <input id="new-table-name-${viewedServer.id}" placeholder="Nom de la table" />
+      <button type="button" onclick="addTable(${viewedServer.id})">Ouvrir</button>
+      <button type="button" class="secondary" onclick="closeCreateTableForm(${viewedServer.id})">Annuler</button>
+    </div>
+
+    <div class="server-keep-board">
+      ${openTables.map((table) => {
+      const tableInvoices = serverInvoices.filter((invoice) => invoice.tableId === table.id);
+      return renderServerKeepTableCard(table, tableInvoices);
+    }).join("")}
+      ${floatingInvoices.map((invoice) => renderServerKeepInvoiceCard(invoice)).join("")}
+      ${!openTables.length && !floatingInvoices.length
+      ? `<div class="server-keep-empty">Aucune table ouverte.</div>`
+      : ""
+    }
+    </div>
+  `;
+}
+
+function renderServerKeepTableCard(table, tableInvoices) {
+  const total = tableInvoices.reduce((sum, invoice) => sum + getInvoiceTotal(invoice), 0);
+
+  return `
+    <article class="server-keep-table-card">
+      <div class="server-keep-table-head">
+        <button type="button" onclick="showCreateInvoiceForm(${table.id})">
+          <strong>${escapeHtml(table.name)}</strong>
+          <span>${tableInvoices.length} facture(s) - ${formatMoney(total)}</span>
+        </button>
+        <button type="button" class="server-keep-add-invoice" onclick="showCreateInvoiceForm(${table.id})">+ Facture</button>
+      </div>
+      <div id="create-invoice-${table.id}" class="server-keep-create inline">
+        <input id="new-invoice-name-${table.id}" placeholder="Nom facture optionnel" />
+        <button type="button" onclick="addInvoiceToTable(${table.id})">Creer</button>
+        <button type="button" class="secondary" onclick="closeCreateInvoiceForm(${table.id})">Annuler</button>
+      </div>
+      <div class="server-keep-table-invoices">
+        ${tableInvoices.length
+      ? tableInvoices.map((invoice) => renderServerKeepInvoiceCard(invoice)).join("")
+      : `<div class="server-keep-empty compact">Aucune facture pour le moment.</div>`
+    }
+      </div>
+    </article>
+  `;
+}
+
+function renderServerKeepInvoiceCard(invoice) {
+  const lastChange = invoice.updatedAt || invoice.createdAt;
+
+  return `
+    <article class="server-keep-card ${getPaymentClass(invoice)}">
+      <button type="button" onclick="openServerKeepInvoice(${invoice.id})">
+        <div class="server-keep-card-head">
+          <strong>${escapeHtml(getInvoiceKeepTitle(invoice))}</strong>
+          <span>${getServerKeepStatus(invoice)}</span>
+        </div>
+        <div class="server-keep-preview">
+          ${getServerKeepPreview(invoice)}
+        </div>
+        <div class="server-keep-card-foot">
+          <span>Total : ${formatMoney(getInvoiceTotal(invoice))}</span>
+          <span>${formatTime(lastChange)}</span>
+        </div>
+      </button>
+    </article>
+  `;
+}
+
+function renderServerKeepDetail(user, viewedServer, invoice) {
+  const locked = isInvoiceLocked(invoice);
+  const canAct = canActOnInvoice(invoice);
+  const productsToShow = products.slice(0, 18);
+
+  return `
+    <article class="server-keep-detail">
+      <header class="server-keep-detail-head">
+        <button type="button" class="server-keep-back" onclick="backToServerKeepList()">Retour</button>
+        <div>
+          <span>${escapeHtml(viewedServer.name)}</span>
+          <strong>${escapeHtml(getInvoiceKeepTitle(invoice))}</strong>
+        </div>
+        <em>${formatMoney(getInvoiceTotal(invoice))}</em>
+      </header>
+
+      <section class="server-keep-detail-body">
+        <div class="server-keep-items">
+          ${(invoice.items || []).length
+      ? (invoice.items || []).map((item) => renderServerKeepItem(invoice, item, locked, canAct)).join("")
+      : `<div class="server-keep-empty compact">Aucun article.</div>`
+    }
+        </div>
+
+        ${!locked && canAddItem() && canAct
+      ? `<section class="server-keep-add">
+            <input
+              id="item-name-${invoice.id}"
+              list="products-list-${invoice.id}"
+              placeholder="Rechercher un produit"
+              oninput="fillProductPrice(${invoice.id})"
+            />
+            ${renderProductsDatalist(invoice.id)}
+            <input
+              id="item-price-${invoice.id}"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Prix"
+              ${canOverrideInvoiceItemPrice() ? "" : "hidden disabled"}
+            />
+            <button type="button" onclick="addItem(${invoice.id})">Ajouter</button>
+          </section>
+
+          <section class="server-keep-products">
+            ${productsToShow.map((product) => {
+        return `
+                <button type="button" onclick="quickAddProductToInvoice(${invoice.id}, ${product.id})">
+                  <strong>${escapeHtml(product.name)}</strong>
+                  <span>${formatMoney(product.price)}</span>
+                </button>
+              `;
+      }).join("")}
+          </section>`
+      : locked
+        ? `<div class="server-keep-empty compact">Facture reglee : commande verrouillee.</div>`
+        : ""
+    }
+      </section>
+    </article>
+  `;
+}
+
+function renderServerKeepItem(invoice, item, locked, canAct) {
+  const total = Number(item.quantity) * Number(item.unitPrice);
+
+  return `
+    <div class="server-keep-item">
+      <div>
+        <strong>${escapeHtml(item.name)}</strong>
+        <span>${item.quantity} x ${formatMoney(item.unitPrice)} - ${formatMoney(total)}</span>
+      </div>
+      <div class="server-keep-qty">
+        <button type="button" onclick="changeItemQuantity(${invoice.id}, ${item.id}, -1)" ${locked || !canEditItemQuantity() || !canAct ? "disabled" : ""}>-</button>
+        <span>${item.quantity}</span>
+        <button type="button" onclick="changeItemQuantity(${invoice.id}, ${item.id}, 1)" ${locked || !canEditItemQuantity() || !canAct ? "disabled" : ""}>+</button>
+      </div>
+    </div>
+  `;
 }

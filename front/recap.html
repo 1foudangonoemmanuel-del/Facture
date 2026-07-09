@@ -7,7 +7,7 @@
 
   <title>Récap - BRYX</title>
 
-  <link rel="stylesheet" href="style.css?v=20260704-3" />
+  <link rel="stylesheet" href="style.css?v=20260709-theme" />
 </head>
 
 <body>
@@ -41,7 +41,12 @@
 
       <div class="summary-card">
         <span>Ticket moyen</span>
-        <strong id="averageTicket">0.00 €</strong>
+        <strong id="averageTicket">0.00 EUR</strong>
+      </div>
+
+      <div class="summary-card">
+        <span>Ticket median</span>
+        <strong id="medianTicket">0.00 EUR</strong>
       </div>
     </section>
 
@@ -97,10 +102,10 @@
   </main>
 
   <div id="toast" class="toast"></div>
-  <script src="config.js?v=20260704-3"></script>
+  <script src="config.js?v=20260709-theme"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="auth.js?v=20260704-3"></script>
-  <script src="script.js?v=20260704-3"></script>
+  <script src="auth.js?v=20260709-theme"></script>
+  <script src="script.js?v=20260709-theme"></script>
   <script>
     requireRole(["CAISSE", "MANAGER", "ADMIN"]);
     injectRoleNav();
