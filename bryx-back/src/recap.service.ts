@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 
 @Injectable()
@@ -198,6 +198,48 @@ export class RecapService {
                 items: row.invoice.items,
             })),
             tables,
+        };
+    }
+
+    async closeToday(actorUserId: number) {
+        const { start, end } = this.getTodayBounds();
+        const recap = await this.getTodayRecap();
+
+        const openInvoices = await this.prisma.invoice.findMany({
+            where: {
+                status: {
+                    notIn: ['PAID', 'CANCELLED'],
+                },
+                createdAt: {
+                    gte: start,
+                    lt: end,
+                },
+            },
+            select: {
+                id: true,
+                name: true,
+                table: true,
+            },
+        });
+
+        if (openInvoices.length) {
+            throw new BadRequestException(
+                `Impossible de clore la journee : ${openInvoices.length} facture(s) encore ouverte(s)`,
+            );
+        }
+
+        await this.prisma.activityLog.create({
+            data: {
+                action: 'CLOSE_DAY',
+                actorUserId,
+                details: `Cloture journee : ${recap.summary.invoiceCount} facture(s), total ${recap.summary.totalFacture.toFixed(2)}`,
+            },
+        });
+
+        return {
+            closed: true,
+            closedAt: new Date(),
+            summary: recap.summary,
         };
     }
 

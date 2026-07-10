@@ -2993,6 +2993,22 @@ async function downloadRecapPdf() {
   }
 }
 
+async function closeToday() {
+  const confirmed = window.confirm(
+    "Cloturer la journee ?\n\nToutes les factures doivent deja etre cloturees.",
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const result = await apiPost("/recap/close-today", {});
+    showToast(`Journee cloturee. Total ${formatMoney(result.summary?.totalFacture || 0)}.`);
+    await renderRecapPage();
+  } catch (error) {
+    showError(error);
+  }
+}
+
 /* -------------------- SERVER PHONE ACCORDION OVERRIDES -------------------- */
 
 function renderServerPhoneTablesHtml(serverId, serverTables) {

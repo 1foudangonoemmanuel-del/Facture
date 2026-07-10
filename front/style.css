@@ -1834,6 +1834,10 @@ body.server-keep-mode .left-board {
   flex-wrap: wrap;
 }
 
+.recap-actions .danger {
+  margin-right: auto;
+}
+
 /* MODAL / TOAST */
 
 .context-menu {
