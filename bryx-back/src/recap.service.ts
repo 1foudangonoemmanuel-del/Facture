@@ -10,7 +10,7 @@ export class RecapService {
     ) { }
 
     async getTodayRecap() {
-        const { start, end } = this.getTodayBounds();
+        const { start, end } = await this.getActiveDayBounds();
 
         const invoices = await this.prisma.invoice.findMany({
             where: {
@@ -337,5 +337,26 @@ export class RecapService {
         end.setDate(end.getDate() + 1);
 
         return { start, end };
+    }
+
+    private async getActiveDayBounds() {
+        const bounds = this.getTodayBounds();
+        const lastClose = await this.prisma.activityLog.findFirst({
+            where: {
+                action: 'CLOSE_DAY',
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
+            select: {
+                createdAt: true,
+            },
+        });
+
+        if (lastClose && lastClose.createdAt > bounds.start) {
+            bounds.start = lastClose.createdAt;
+        }
+
+        return bounds;
     }
 }

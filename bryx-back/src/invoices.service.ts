@@ -14,8 +14,17 @@ export class InvoicesService {
         private readonly realtime: RealtimeService,
     ) { }
 
-    findAll() {
+    async findAll() {
+        const serviceStart = await this.getActiveServiceStart();
+
         return this.prisma.invoice.findMany({
+            where: serviceStart
+                ? {
+                    createdAt: {
+                        gt: serviceStart,
+                    },
+                }
+                : undefined,
             orderBy: {
                 createdAt: 'asc',
             },
@@ -484,5 +493,21 @@ export class InvoicesService {
         this.realtime.broadcast('table.closed', {
             tableId,
         });
+    }
+
+    private async getActiveServiceStart() {
+        const lastClose = await this.prisma.activityLog.findFirst({
+            where: {
+                action: 'CLOSE_DAY',
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
+            select: {
+                createdAt: true,
+            },
+        });
+
+        return lastClose?.createdAt || null;
     }
 }

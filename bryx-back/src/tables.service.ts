@@ -9,8 +9,17 @@ export class TablesService {
         private readonly realtime: RealtimeService,
     ) { }
 
-    findAll() {
+    async findAll() {
+        const serviceStart = await this.getActiveServiceStart();
+
         return this.prisma.table.findMany({
+            where: serviceStart
+                ? {
+                    createdAt: {
+                        gt: serviceStart,
+                    },
+                }
+                : undefined,
             orderBy: {
                 createdAt: 'asc',
             },
@@ -176,5 +185,21 @@ export class TablesService {
         });
 
         return table;
+    }
+
+    private async getActiveServiceStart() {
+        const lastClose = await this.prisma.activityLog.findFirst({
+            where: {
+                action: 'CLOSE_DAY',
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
+            select: {
+                createdAt: true,
+            },
+        });
+
+        return lastClose?.createdAt || null;
     }
 }
