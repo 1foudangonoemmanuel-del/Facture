@@ -211,17 +211,12 @@ export class RecapService {
     }
 
     async closeToday(actorUserId: number) {
-        const { start, end } = this.getTodayBounds();
         const recap = await this.getTodayRecap();
 
         const openInvoices = await this.prisma.invoice.findMany({
             where: {
                 status: {
                     notIn: ['PAID', 'CANCELLED'],
-                },
-                createdAt: {
-                    gte: start,
-                    lt: end,
                 },
             },
             select: {
@@ -242,9 +237,12 @@ export class RecapService {
                 status: {
                     notIn: ['CLOSED', 'CANCELLED'],
                 },
-                createdAt: {
-                    gte: start,
-                    lt: end,
+                invoices: {
+                    none: {
+                        status: {
+                            notIn: ['PAID', 'CANCELLED'],
+                        },
+                    },
                 },
             },
             data: {
