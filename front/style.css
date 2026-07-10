@@ -14,6 +14,12 @@
   --success: #059669;
   --warning: #f59e0b;
   --blue: #2563eb;
+  --button-bg: #111827;
+  --button-text: #ffffff;
+  --button-secondary-bg: #4b5563;
+  --button-secondary-text: #ffffff;
+  --button-danger-bg: #dc2626;
+  --button-danger-text: #ffffff;
   --shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
   --radius: 14px;
 }
@@ -59,8 +65,8 @@ nav a {
 
 button {
   border: none;
-  background: var(--primary);
-  color: white;
+  background: var(--button-bg);
+  color: var(--button-text);
   padding: 8px 11px;
   border-radius: 9px;
   cursor: pointer;
@@ -77,11 +83,13 @@ button:active {
 }
 
 button.secondary {
-  background: #4b5563;
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
 }
 
 button.danger {
-  background: var(--danger);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
 }
 
 button.small {
@@ -1402,8 +1410,8 @@ body.server-keep-mode .left-board {
 }
 
 .server-filter-btn.active {
-  background: var(--primary);
-  color: white;
+  background: var(--button-bg);
+  color: var(--button-text);
 }
 
 .zone-title {
@@ -1970,8 +1978,8 @@ body.server-keep-mode .left-board {
   left: 50%;
   bottom: 22px;
   transform: translateX(-50%);
-  background: var(--primary);
-  color: white;
+  background: var(--button-bg);
+  color: var(--button-text);
   padding: 11px 15px;
   border-radius: 999px;
   font-weight: bold;
@@ -1985,7 +1993,8 @@ body.server-keep-mode .left-board {
 }
 
 .toast.error {
-  background: var(--danger);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
 }
 
 /* RESPONSIVE */
@@ -2569,6 +2578,12 @@ button:disabled:hover {
     --muted: #9ca3af;
     --border: #334155;
     --primary: #e5e7eb;
+    --button-bg: #f8fafc;
+    --button-text: #0f172a;
+    --button-secondary-bg: #374151;
+    --button-secondary-text: #f8fafc;
+    --button-danger-bg: #ef4444;
+    --button-danger-text: #ffffff;
     --shadow: 0 14px 32px rgba(0, 0, 0, 0.32);
   }
 
@@ -2578,13 +2593,18 @@ button:disabled:hover {
   }
 
   button {
-    background: #e5e7eb;
-    color: #111827;
+    background: var(--button-bg);
+    color: var(--button-text);
   }
 
   button.secondary {
-    background: #374151;
-    color: #f8fafc;
+    background: var(--button-secondary-bg);
+    color: var(--button-secondary-text);
+  }
+
+  button.danger {
+    background: var(--button-danger-bg);
+    color: var(--button-danger-text);
   }
 
   input,
