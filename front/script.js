@@ -386,6 +386,24 @@ function getTableNameById(tableId) {
   return table ? table.name : "Table supprimée";
 }
 
+function getInvoiceTableLabel(invoice) {
+  if (!invoice?.tableId) return "Facture volante";
+  return invoice.table?.name || getTableNameById(invoice.tableId);
+}
+
+function isInvoiceOnOpenTable(invoice) {
+  if (!invoice?.tableId) return false;
+  return tables.some((table) => table.id === invoice.tableId);
+}
+
+function shouldShowInvoiceInClosedSection(invoice, serverId) {
+  return (
+    getServerIdFromInvoice(invoice) === serverId &&
+    getInvoicePaymentStatus(invoice) === "paid" &&
+    (invoice.tableId === null || !isInvoiceOnOpenTable(invoice))
+  );
+}
+
 function getItemsPreview(invoice) {
   const items = invoice.items || [];
 
@@ -1956,8 +1974,13 @@ async function renderServicePage(options = {}) {
       return (
         invoice.tableId === null &&
         getServerIdFromInvoice(invoice) === server.id &&
+        getInvoicePaymentStatus(invoice) !== "paid" &&
         shouldShowInvoiceForServer(invoice, server.id)
       );
+    });
+
+    const closedInvoices = invoices.filter((invoice) => {
+      return shouldShowInvoiceInClosedSection(invoice, server.id);
     });
 
     const canActHere = canCurrentUserActOnServer(server.id);
@@ -2023,12 +2046,16 @@ async function renderServicePage(options = {}) {
 
       <h4 class="zone-title">Factures sans table</h4>
       <div id="floating-zone-${server.id}" class="floating-area"></div>
+
+      <h4 class="zone-title">Factures cloturees</h4>
+      <div id="closed-zone-${server.id}" class="closed-area"></div>
     `;
 
     grid.appendChild(box);
 
     renderTablesForServer(server.id, serverTables);
     renderFloatingInvoices(server.id, floatingInvoices);
+    renderClosedInvoices(server.id, closedInvoices);
   });
 
   renderInvoiceDetailPanel();
@@ -2319,6 +2346,10 @@ function renderFloatingInvoices(serverId, list) {
   renderInvoicesStack(`floating-zone-${serverId}`, list);
 }
 
+function renderClosedInvoices(serverId, list) {
+  renderInvoicesStack(`closed-zone-${serverId}`, list);
+}
+
 function renderInvoicesStack(containerId, list) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -2351,7 +2382,7 @@ function renderInvoicesStack(containerId, list) {
           <div class="split-invoice-main">
             <strong>${escapeHtml(getInvoiceName(invoice))}</strong>
             <span>
-              ${invoice.tableId === null ? "Sans table" : getTableNameById(invoice.tableId)}
+              ${escapeHtml(getInvoiceTableLabel(invoice))}
               • ${(invoice.items || []).length} article(s)
               • ${formatTime(invoice.createdAt)}
             </span>

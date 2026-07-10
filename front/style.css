@@ -785,7 +785,8 @@ body.caisse-sheet-mode .zone-title {
 }
 
 body.caisse-sheet-mode .tables-area,
-body.caisse-sheet-mode .floating-area {
+body.caisse-sheet-mode .floating-area,
+body.caisse-sheet-mode .closed-area {
   display: grid;
   gap: 0;
   padding: 0 10px 10px;
@@ -1414,7 +1415,8 @@ body.server-keep-mode .left-board {
 }
 
 .tables-area,
-.floating-area {
+.floating-area,
+.closed-area {
   display: grid;
   gap: 10px;
 }

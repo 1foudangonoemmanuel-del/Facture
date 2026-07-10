@@ -1,9 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { RealtimeService } from './realtime.service';
 
 @Injectable()
 export class RecapService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly realtime: RealtimeService,
+    ) { }
 
     async getTodayRecap() {
         const { start, end } = this.getTodayBounds();
@@ -233,17 +237,39 @@ export class RecapService {
             );
         }
 
+        const closedTables = await this.prisma.table.updateMany({
+            where: {
+                status: {
+                    notIn: ['CLOSED', 'CANCELLED'],
+                },
+                createdAt: {
+                    gte: start,
+                    lt: end,
+                },
+            },
+            data: {
+                status: 'CLOSED',
+            },
+        });
+
         await this.prisma.activityLog.create({
             data: {
                 action: 'CLOSE_DAY',
                 actorUserId,
-                details: `Cloture journee : ${recap.summary.invoiceCount} facture(s), total ${recap.summary.totalFacture.toFixed(2)}`,
+                details: `Cloture journee : ${recap.summary.invoiceCount} facture(s), ${closedTables.count} table(s), total ${recap.summary.totalFacture.toFixed(2)}`,
             },
+        });
+
+        this.realtime.broadcast('day.closed', {
+            closedTables: closedTables.count,
+            invoiceCount: recap.summary.invoiceCount,
+            total: recap.summary.totalFacture,
         });
 
         return {
             closed: true,
             closedAt: new Date(),
+            closedTables: closedTables.count,
             summary: recap.summary,
         };
     }
