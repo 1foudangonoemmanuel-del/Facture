@@ -1763,7 +1763,8 @@ body.server-keep-mode .left-board {
 
 .summary-card,
 .recap-payment-card {
-  background: white;
+  background: var(--surface);
+  color: var(--text);
   border: 1px solid var(--border);
   border-radius: 15px;
   padding: 14px;
