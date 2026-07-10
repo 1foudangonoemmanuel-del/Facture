@@ -91,6 +91,9 @@ export class RecapService {
         const medianTicket = this.getMedian(
             invoiceTotals.map((row) => row.total),
         );
+        const ticketQuartiles = this.getQuartiles(
+            invoiceTotals.map((row) => row.total),
+        );
 
         const totalBrut = invoiceTotals.reduce((sum, row) => {
             return sum + row.grossTotal;
@@ -164,6 +167,8 @@ export class RecapService {
                 totalRemise,
                 totalFacture,
                 medianTicket,
+                firstQuartileTicket: ticketQuartiles.q1,
+                thirdQuartileTicket: ticketQuartiles.q3,
                 totalEspeces,
                 totalCarte,
                 totalRegle,
@@ -269,8 +274,30 @@ export class RecapService {
         if (!values.length) return 0;
 
         const sorted = values.slice().sort((a, b) => a - b);
-        const middle = Math.floor(sorted.length / 2);
+        return this.getMedianFromSorted(sorted);
+    }
 
+    private getQuartiles(values: number[]) {
+        if (!values.length) {
+            return { q1: 0, q3: 0 };
+        }
+
+        const sorted = values.slice().sort((a, b) => a - b);
+        const middle = Math.floor(sorted.length / 2);
+        const lowerHalf = sorted.slice(0, middle);
+        const upperHalf =
+            sorted.length % 2 === 0 ? sorted.slice(middle) : sorted.slice(middle + 1);
+
+        return {
+            q1: lowerHalf.length ? this.getMedianFromSorted(lowerHalf) : sorted[0],
+            q3: upperHalf.length
+                ? this.getMedianFromSorted(upperHalf)
+                : sorted[sorted.length - 1],
+        };
+    }
+
+    private getMedianFromSorted(sorted: number[]) {
+        const middle = Math.floor(sorted.length / 2);
         if (sorted.length % 2 === 1) {
             return sorted[middle];
         }

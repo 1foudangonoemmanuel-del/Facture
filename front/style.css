@@ -1834,6 +1834,13 @@ body.server-keep-mode .left-board {
   color: var(--muted);
 }
 
+.server-detail-pdf,
+.server-detail-card,
+.server-detail-card .recap-invoice-line,
+.server-detail-card .recap-invoice-line span {
+  color: var(--text);
+}
+
 .recap-invoice-line {
   display: flex;
   justify-content: space-between;
@@ -2064,6 +2071,7 @@ body.server-keep-mode .left-board {
 
   body {
     background: white;
+    color: #111;
   }
 
   .recap-page {
@@ -2076,9 +2084,18 @@ body.server-keep-mode .left-board {
   .recap-table-card,
   .recap-floating-card,
   .server-detail-card {
+    background: white;
     box-shadow: none;
     border: 1px solid #111;
+    color: #111;
     break-inside: avoid;
+  }
+
+  .server-summary-card *,
+  .recap-table-card *,
+  .recap-floating-card *,
+  .server-detail-card * {
+    color: #111 !important;
   }
 }
 
@@ -2593,6 +2610,7 @@ button:disabled:hover {
   .server-summary-card,
   .recap-table-card,
   .recap-floating-card,
+  .server-detail-card,
   .login-card,
   .admin-card,
   .admin-panel,

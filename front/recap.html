@@ -48,6 +48,16 @@
         <span>Ticket median</span>
         <strong id="medianTicket">0.00 EUR</strong>
       </div>
+
+      <div class="summary-card">
+        <span>Quartile bas</span>
+        <strong id="firstQuartileTicket">0.00 EUR</strong>
+      </div>
+
+      <div class="summary-card">
+        <span>Quartile haut</span>
+        <strong id="thirdQuartileTicket">0.00 EUR</strong>
+      </div>
     </section>
 
     <section class="recap-payment-grid">
@@ -106,7 +116,7 @@
   <script src="config.js?v=20260709-theme"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="auth.js?v=20260709-theme"></script>
-  <script src="script.js?v=20260710-close-day"></script>
+  <script src="script.js?v=20260710-quartiles"></script>
   <script>
     requireRole(["CAISSE", "MANAGER", "ADMIN"]);
     injectRoleNav();

@@ -2778,6 +2778,8 @@ async function renderRecapPage() {
     document.getElementById("invoiceCount").textContent = summary.invoiceCount;
     document.getElementById("averageTicket").textContent = formatMoney(ticketAverage);
     document.getElementById("medianTicket").textContent = formatMoney(summary.medianTicket || 0);
+    document.getElementById("firstQuartileTicket").textContent = formatMoney(summary.firstQuartileTicket || 0);
+    document.getElementById("thirdQuartileTicket").textContent = formatMoney(summary.thirdQuartileTicket || 0);
 
     document.getElementById("cardPaidTotal").textContent = formatMoney(summary.totalCarte);
     document.getElementById("cashPaidTotal").textContent = formatMoney(summary.totalEspeces);
@@ -2937,6 +2939,8 @@ async function buildRecapMessage() {
     `Total réglé : ${formatMoney(s.totalRegle)}`,
     `Reste à régler : ${formatMoney(s.resteARegler)}`,
     `Ticket median : ${formatMoney(s.medianTicket || 0)}`,
+    `Quartile bas : ${formatMoney(s.firstQuartileTicket || 0)}`,
+    `Quartile haut : ${formatMoney(s.thirdQuartileTicket || 0)}`,
     "",
     `Tables : ${s.tableCount}`,
     `Factures : ${s.invoiceCount}`,
