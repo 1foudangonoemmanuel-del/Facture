@@ -1,9 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { RealtimeService } from './realtime.service';
 
 @Injectable()
 export class TablesService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly realtime: RealtimeService,
+    ) { }
 
     findAll() {
         return this.prisma.table.findMany({
@@ -71,6 +75,11 @@ export class TablesService {
             },
         });
 
+        this.realtime.broadcast('table.created', {
+            tableId: table.id,
+            responsibleUserId: table.responsibleUserId,
+        });
+
         return table;
     }
 
@@ -113,6 +122,12 @@ export class TablesService {
             },
         });
 
+        this.realtime.broadcast('table.updated', {
+            tableId: table.id,
+            status: table.status,
+            responsibleUserId: table.responsibleUserId,
+        });
+
         return table;
     }
 
@@ -153,6 +168,11 @@ export class TablesService {
                 targetId: targetUser.id,
                 details: `Table ${table.name} déplacée vers ${targetUser.name}`,
             },
+        });
+
+        this.realtime.broadcast('table.moved', {
+            tableId: table.id,
+            responsibleUserId: table.responsibleUserId,
         });
 
         return table;

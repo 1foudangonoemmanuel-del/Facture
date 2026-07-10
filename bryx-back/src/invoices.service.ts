@@ -5,10 +5,14 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { RealtimeService } from './realtime.service';
 
 @Injectable()
 export class InvoicesService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly realtime: RealtimeService,
+    ) { }
 
     findAll() {
         return this.prisma.invoice.findMany({
@@ -93,6 +97,12 @@ export class InvoicesService {
             },
         });
 
+        this.realtime.broadcast('invoice.created', {
+            invoiceId: invoice.id,
+            tableId,
+            responsibleUserId,
+        });
+
         return this.findOne(invoice.id);
     }
 
@@ -135,6 +145,12 @@ export class InvoicesService {
                         ? `Facture ${invoice.id} annulée`
                         : `Modification facture ${invoice.id}`,
             },
+        });
+
+        this.realtime.broadcast('invoice.updated', {
+            invoiceId: invoice.id,
+            tableId: invoice.tableId,
+            status: updated.status,
         });
 
         return this.findOne(updated.id);
@@ -206,6 +222,12 @@ export class InvoicesService {
             },
         });
 
+        this.realtime.broadcast('invoice.moved', {
+            invoiceId: invoice.id,
+            tableId: data.tableId || null,
+            responsibleUserId,
+        });
+
         return this.findOne(updated.id);
     }
 
@@ -249,6 +271,12 @@ export class InvoicesService {
             },
         });
 
+        this.realtime.broadcast('invoice.moved', {
+            invoiceId: invoice.id,
+            tableId: invoice.tableId,
+            responsibleUserId: user.id,
+        });
+
         return this.findOne(updated.id);
     }
 
@@ -276,6 +304,11 @@ export class InvoicesService {
                 invoiceId: invoice.id,
                 details: `Règlement demandé pour facture ${invoice.id}`,
             },
+        });
+
+        this.realtime.broadcast('payment.requested', {
+            invoiceId: invoice.id,
+            tableId: invoice.tableId,
         });
 
         return this.findOne(updated.id);
@@ -337,6 +370,12 @@ export class InvoicesService {
             },
         });
 
+        this.realtime.broadcast('payment.updated', {
+            invoiceId: invoice.id,
+            tableId: invoice.tableId,
+            status: updated.status,
+        });
+
         return this.findOne(updated.id);
     }
 
@@ -381,6 +420,69 @@ export class InvoicesService {
             },
         });
 
+        if (invoice.tableId) {
+            await this.closeTableIfEveryInvoiceIsPaid(
+                invoice.tableId,
+                data.actorUserId,
+            );
+        }
+
+        this.realtime.broadcast('invoice.validated', {
+            invoiceId: invoice.id,
+            tableId: invoice.tableId,
+            status: updated.status,
+        });
+
         return this.findOne(updated.id);
+    }
+
+    private async closeTableIfEveryInvoiceIsPaid(
+        tableId: number,
+        actorUserId?: number,
+    ) {
+        const table = await this.prisma.table.findUnique({
+            where: { id: tableId },
+            include: {
+                invoices: {
+                    where: {
+                        status: {
+                            not: 'CANCELLED',
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!table || table.status === 'CLOSED') return;
+        if (!table.invoices.length) return;
+
+        const everyInvoicePaid = table.invoices.every((tableInvoice) => {
+            return (
+                tableInvoice.status === 'PAID' ||
+                tableInvoice.paymentValidated === true
+            );
+        });
+
+        if (!everyInvoicePaid) return;
+
+        await this.prisma.table.update({
+            where: { id: tableId },
+            data: {
+                status: 'CLOSED',
+            },
+        });
+
+        await this.prisma.activityLog.create({
+            data: {
+                action: 'UPDATE_TABLE',
+                actorUserId: actorUserId || null,
+                tableId,
+                details: `Table ${table.name} fermee automatiquement : toutes les factures sont cloturees`,
+            },
+        });
+
+        this.realtime.broadcast('table.closed', {
+            tableId,
+        });
     }
 }

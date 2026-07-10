@@ -724,6 +724,140 @@ body.server-phone-mode .invoice-detail-panel {
   display: none;
 }
 
+/* CAISSE SHEET EXPERIENCE */
+
+body.caisse-sheet-mode {
+  background: #f3f4f6;
+}
+
+body.caisse-sheet-mode .service-page {
+  padding: 10px;
+  gap: 10px;
+}
+
+body.caisse-sheet-mode .split-workspace {
+  grid-template-columns: minmax(0, 1fr) 440px;
+  gap: 10px;
+}
+
+body.caisse-sheet-mode .service-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+
+body.caisse-sheet-mode .server-box {
+  min-width: 0;
+  width: 100%;
+  flex: none;
+  border-radius: 6px;
+  box-shadow: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+body.caisse-sheet-mode .server-header {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+body.caisse-sheet-mode .server-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+body.caisse-sheet-mode .server-total {
+  font-size: 16px;
+}
+
+body.caisse-sheet-mode .server-filters,
+body.caisse-sheet-mode .server-actions {
+  padding: 8px 10px;
+}
+
+body.caisse-sheet-mode .zone-title {
+  margin: 10px 10px 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+body.caisse-sheet-mode .tables-area,
+body.caisse-sheet-mode .floating-area {
+  display: grid;
+  gap: 0;
+  padding: 0 10px 10px;
+}
+
+body.caisse-sheet-mode .table-card {
+  border-radius: 0;
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  padding: 0;
+}
+
+body.caisse-sheet-mode .table-card:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+body.caisse-sheet-mode .table-card-header {
+  padding: 8px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+}
+
+body.caisse-sheet-mode .table-card h3,
+body.caisse-sheet-mode .detail-title-input {
+  font-size: 14px;
+}
+
+body.caisse-sheet-mode .invoices-stack {
+  display: grid;
+  gap: 0;
+}
+
+body.caisse-sheet-mode .invoice-card {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+}
+
+body.caisse-sheet-mode .invoice-card:last-child {
+  border-bottom: 0;
+}
+
+body.caisse-sheet-mode .split-invoice-button {
+  min-height: 44px;
+  padding: 7px 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 8px;
+}
+
+body.caisse-sheet-mode .split-invoice-main strong,
+body.caisse-sheet-mode .split-invoice-side strong {
+  font-size: 13px;
+}
+
+body.caisse-sheet-mode .split-invoice-main span,
+body.caisse-sheet-mode .split-invoice-main em {
+  font-size: 11px;
+}
+
+body.caisse-sheet-mode .invoice-detail-panel {
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+body.caisse-sheet-mode .detail-section {
+  border-radius: 6px;
+}
+
 /* SERVER KEEP EXPERIENCE */
 
 body.server-keep-mode {
@@ -837,15 +971,14 @@ body.server-keep-mode .left-board {
 }
 
 .server-keep-board {
-  columns: 260px;
-  column-gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .server-keep-card {
-  display: inline-block;
   width: 100%;
   margin: 0 0 12px;
-  break-inside: avoid;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #ffffff;
@@ -854,10 +987,8 @@ body.server-keep-mode .left-board {
 }
 
 .server-keep-table-card {
-  display: inline-block;
   width: 100%;
   margin: 0 0 12px;
-  break-inside: avoid;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #ffffff;
@@ -1087,6 +1218,39 @@ body.server-keep-mode .left-board {
   font-size: 12px;
 }
 
+.server-keep-payment {
+  grid-column: 2;
+  display: grid;
+  gap: 9px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.server-keep-payment-head,
+.server-keep-payment-summary,
+.server-keep-payment-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.server-keep-payment-head span,
+.server-keep-payment-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.server-keep-payment-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .server-keep-empty {
   border: 1px dashed var(--border);
   border-radius: 8px;
@@ -1131,12 +1295,16 @@ body.server-keep-mode .left-board {
 }
 
 @media (max-width: 760px) {
+  body.caisse-sheet-mode .service-grid {
+    grid-template-columns: 1fr;
+  }
+
   .server-keep-shell {
     padding: 12px;
   }
 
   .server-keep-board {
-    columns: 1;
+    grid-template-columns: 1fr;
   }
 
   .server-keep-header strong,
@@ -1170,6 +1338,10 @@ body.server-keep-mode .left-board {
   .server-keep-products {
     grid-column: 1;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .server-keep-payment {
+    grid-column: 1;
   }
 }
 
@@ -2419,6 +2591,7 @@ button:disabled:hover {
   }
 
   .server-keep-card > button,
+  body.caisse-sheet-mode .table-card-header,
   .server-keep-add-invoice,
   .server-phone-invoice-toggle,
   .server-phone-table-head,

@@ -9,6 +9,9 @@ let serviceLogs = [];
 let serviceAutoRefreshTimer = null;
 let serviceRefreshInFlight = false;
 let serviceConnectionState = "online";
+let serviceRealtimeSocket = null;
+let serviceRealtimeReconnectTimer = null;
+let serviceRealtimeRefreshTimer = null;
 
 let selectedInvoiceId =
   Number(localStorage.getItem("bryx_selected_invoice_backend")) || null;
@@ -21,6 +24,10 @@ function lockActionButtons(scope = document) {
   scope.querySelectorAll("button:not([type])").forEach((button) => {
     button.type = "button";
   });
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /* -------------------- CURRENT USER -------------------- */
@@ -60,69 +67,68 @@ function ensureConnected() {
 
 /* -------------------- API -------------------- */
 
-async function apiGet(path) {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
-    },
-  });
+function isNetworkError(error) {
+  const message = String(error?.message || error || "");
+  return (
+    error instanceof TypeError ||
+    message === "Failed to fetch" ||
+    message.includes("NetworkError") ||
+    message.includes("Load failed")
+  );
+}
 
-  if (!res.ok) {
-    throw new Error(await res.text());
+async function apiRequest(path, options = {}) {
+  const method = options.method || "GET";
+  const canRetry = options.retry ?? (method === "GET" || method === "PATCH");
+  const attempts = canRetry ? 2 : 1;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const res = await fetch(`${API_URL}${path}`, {
+        method,
+        headers: {
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+          ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
+        },
+        ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      setServiceConnectionState("online");
+      return res.status === 204 ? null : res.json();
+    } catch (error) {
+      if (attempt < attempts && isNetworkError(error)) {
+        setServiceConnectionState("offline", "Connexion instable - nouvelle tentative...");
+        await wait(650);
+        continue;
+      }
+
+      if (isNetworkError(error)) {
+        setServiceConnectionState("offline", "Impossible de joindre le serveur pour le moment.");
+      }
+
+      throw error;
+    }
   }
+}
 
-  return res.json();
+async function apiGet(path) {
+  return apiRequest(path);
 }
 
 async function apiPost(path, body) {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
+  return apiRequest(path, { method: "POST", body, retry: false });
 }
 
 async function apiPatch(path, body) {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
+  return apiRequest(path, { method: "PATCH", body, retry: true });
 }
 
 async function apiDelete(path, body = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
-      ...(typeof getAuthHeaders === "function" ? getAuthHeaders() : {}),
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
+  return apiRequest(path, { method: "DELETE", body, retry: false });
 }
 
 /* -------------------- LOAD DATA -------------------- */
@@ -153,6 +159,81 @@ function startServiceAutoRefresh() {
   if (serviceAutoRefreshTimer || !isServicePageActive()) return;
 
   serviceAutoRefreshTimer = setInterval(refreshServiceDataSilently, 3000);
+  startServiceRealtime();
+}
+
+function getRealtimeUrl() {
+  const token = typeof getAuthToken === "function" ? getAuthToken() : "";
+  const encodedToken = encodeURIComponent(token || "");
+
+  if (/^https?:\/\//.test(API_URL)) {
+    const url = new URL(API_URL);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.pathname = "/ws";
+    url.search = `token=${encodedToken}`;
+    return url.toString();
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/ws?token=${encodedToken}`;
+}
+
+function startServiceRealtime() {
+  if (!isServicePageActive() || serviceRealtimeSocket) return;
+
+  const token = typeof getAuthToken === "function" ? getAuthToken() : "";
+  if (!token || !("WebSocket" in window)) return;
+
+  try {
+    serviceRealtimeSocket = new WebSocket(getRealtimeUrl());
+
+    serviceRealtimeSocket.addEventListener("open", () => {
+      setServiceConnectionState("online");
+    });
+
+    serviceRealtimeSocket.addEventListener("message", (event) => {
+      handleRealtimeMessage(event.data);
+    });
+
+    serviceRealtimeSocket.addEventListener("close", () => {
+      serviceRealtimeSocket = null;
+      scheduleRealtimeReconnect();
+    });
+
+    serviceRealtimeSocket.addEventListener("error", () => {
+      setServiceConnectionState("offline", "Temps reel indisponible - fallback actif");
+    });
+  } catch (error) {
+    console.error(error);
+    serviceRealtimeSocket = null;
+    scheduleRealtimeReconnect();
+  }
+}
+
+function scheduleRealtimeReconnect() {
+  if (serviceRealtimeReconnectTimer || !isServicePageActive()) return;
+
+  serviceRealtimeReconnectTimer = setTimeout(() => {
+    serviceRealtimeReconnectTimer = null;
+    startServiceRealtime();
+  }, 4000);
+}
+
+function handleRealtimeMessage(rawMessage) {
+  let message = null;
+
+  try {
+    message = JSON.parse(rawMessage);
+  } catch {
+    return;
+  }
+
+  if (!message?.type || message.type === "realtime.connected") return;
+
+  clearTimeout(serviceRealtimeRefreshTimer);
+  serviceRealtimeRefreshTimer = setTimeout(() => {
+    refreshServiceDataSilently();
+  }, 180);
 }
 
 async function refreshServiceDataSilently() {
@@ -780,7 +861,7 @@ async function quickAddProductToInvoice(invoiceId, productId) {
     renderServerPhoneInvoiceFromState(invoiceId);
     showToast(`${product.name} ajouté.`);
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -861,14 +942,47 @@ function showError(error) {
   }
 
   if (
+    isNetworkError(error) ||
     message === "Failed to fetch" ||
     message.includes("NetworkError") ||
     message.includes("Load failed")
   ) {
-    message = "Impossible de joindre le serveur pour le moment.";
+    message = "Connexion perdue - les donnees vont se resynchroniser.";
+  }
+
+  if (
+    message.includes("introuvable") ||
+    message.includes("not found") ||
+    message.includes("404")
+  ) {
+    message = "Cette ligne a change ailleurs. Je resynchronise la facture.";
   }
 
   showToast(message, "error");
+}
+
+async function recoverServiceAfterActionError(error) {
+  showError(error);
+
+  if (!isServicePageActive()) return;
+
+  try {
+    await loadServiceData();
+    tables = tables.filter((table) => table.status !== "CANCELLED" && table.status !== "CLOSED");
+    invoices = invoices.filter((invoice) => invoice.status !== "CANCELLED");
+    clearSelectedInvoiceIfMissing();
+
+    if (!isEditingServiceInput()) {
+      const user = currentUser();
+      if (user?.role === "SERVER") {
+        renderServerPhonePage(user, getVisibleServersForCurrentUser());
+      } else {
+        await renderServicePage({ skipLoad: true });
+      }
+    }
+  } catch (refreshError) {
+    console.error(refreshError);
+  }
 }
 
 function setServiceConnectionState(state, message = "") {
@@ -1074,7 +1188,7 @@ async function addTable(serverId) {
     await renderServicePage();
     showToast(`Table "${name}" ouverte.`);
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1108,7 +1222,7 @@ async function renameTable(tableId) {
     await renderServicePage();
     showToast("Table renommée.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1141,7 +1255,7 @@ async function closeTable(tableId) {
     await renderServicePage();
     showToast("Table fermée.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1178,7 +1292,7 @@ async function moveTableToServer(tableId) {
     await renderServicePage();
     showToast("Table transférée.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1259,7 +1373,7 @@ async function createInvoice({ responsibleUserId, tableId, name }) {
 
     showToast(tableId ? "Nouvelle facture ajoutée à la table." : "Facture volante créée.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1300,7 +1414,7 @@ async function attachFloatingInvoiceToTable(invoiceId) {
     await renderServicePage();
     showToast("Facture ajoutée à la table.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1348,7 +1462,7 @@ async function moveInvoiceToTable(invoiceId) {
 
     showToast(tableId ? "Facture déplacée vers la table." : "Facture rendue volante.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1390,7 +1504,7 @@ async function moveInvoiceToServer(invoiceId) {
     await renderServicePage();
     showToast("Facture transférée.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1431,7 +1545,7 @@ async function cancelInvoice(invoiceId) {
     await renderServicePage();
     showToast("Facture annulée.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1464,7 +1578,7 @@ async function renameInvoice(invoiceId, value) {
 
     await renderServicePage();
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1533,7 +1647,7 @@ async function addItem(invoiceId) {
     }
     showToast(product ? `${product.name} ajouté.` : "Article libre ajouté.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1569,7 +1683,7 @@ async function updateItem(invoiceId, itemId, field, value) {
       await renderServicePage();
     }
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1621,7 +1735,7 @@ async function deleteItem(invoiceId, itemId) {
     }
     showToast("Article supprimé.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1656,7 +1770,7 @@ async function setInvoicePayment(invoiceId) {
     }
     showToast("Mode de règlement mis à jour.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1683,7 +1797,7 @@ async function markInvoicePaidByCard(invoiceId) {
     }
     showToast("Montant CB enregistré.");
   } catch (error) {
-    showError(error);
+    await recoverServiceAfterActionError(error);
   }
 }
 
@@ -1779,8 +1893,10 @@ async function renderServicePage(options = {}) {
 
   const visibleServers = getVisibleServersForCurrentUser();
   const serverPhoneMode = user.role === "SERVER";
+  const caisseSheetMode = user.role === "CAISSE";
   document.body.classList.toggle("server-phone-mode", serverPhoneMode);
   document.body.classList.toggle("server-keep-mode", serverPhoneMode);
+  document.body.classList.toggle("caisse-sheet-mode", caisseSheetMode);
   document.body.classList.toggle("has-selected-invoice", Boolean(selectedInvoiceId));
 
   const currentUserBar = document.getElementById("currentUserBar");
@@ -3462,8 +3578,61 @@ function renderServerKeepDetail(user, viewedServer, invoice) {
         ? `<div class="server-keep-empty compact">Facture reglee : commande verrouillee.</div>`
         : ""
     }
+        ${renderServerKeepPayment(invoice, locked, canAct)}
       </section>
     </article>
+  `;
+}
+
+function renderServerKeepPayment(invoice, locked, canAct) {
+  if (!canSetPayment() || !canAct) return "";
+
+  return `
+    <section class="server-keep-payment">
+      <div class="server-keep-payment-head">
+        <strong>Encaissement</strong>
+        <span>Reste ${formatMoney(getInvoiceRemaining(invoice))}</span>
+      </div>
+
+      <div class="server-keep-payment-summary">
+        <span>CB ${formatMoney(getInvoiceCardPaid(invoice))}</span>
+        <span>Espèces ${formatMoney(getInvoiceCashPaid(invoice))}</span>
+      </div>
+
+      <div class="server-keep-payment-grid">
+        <input
+          id="card-paid-${invoice.id}"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="CB"
+          value="${getInvoiceCardPaid(invoice)}"
+          ${locked ? "disabled" : ""}
+        />
+
+        <input
+          id="cash-paid-${invoice.id}"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="Espèces"
+          value="${getInvoiceCashPaid(invoice)}"
+          ${locked ? "disabled" : ""}
+        />
+      </div>
+
+      <div class="server-keep-payment-actions">
+        <button type="button" onclick="setInvoicePayment(${invoice.id})" ${locked ? "disabled" : ""}>Enregistrer</button>
+        ${canSetFullCardPayment()
+      ? `<button type="button" class="secondary" onclick="markInvoicePaidByCard(${invoice.id})" ${locked ? "disabled" : ""}>Tout CB</button>`
+      : ""
+    }
+        ${canSetFullCashPayment()
+      ? `<button type="button" class="secondary" onclick="markInvoicePaidByCash(${invoice.id})" ${locked ? "disabled" : ""}>Tout espèces</button>`
+      : ""
+    }
+      </div>
+    </section>
   `;
 }
 

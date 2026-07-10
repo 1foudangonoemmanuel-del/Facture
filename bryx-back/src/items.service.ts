@@ -5,12 +5,16 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { RealtimeService } from './realtime.service';
 
 const PRICE_MANAGERS = ['ADMIN', 'MANAGER', 'CAISSE'];
 
 @Injectable()
 export class ItemsService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly realtime: RealtimeService,
+    ) { }
 
     async create(
         invoiceId: number,
@@ -111,6 +115,11 @@ export class ItemsService {
             },
         });
 
+        this.realtime.broadcast('item.added', {
+            invoiceId: invoice.id,
+            itemId: item.id,
+        });
+
         return item;
     }
 
@@ -179,6 +188,11 @@ export class ItemsService {
             },
         });
 
+        this.realtime.broadcast('item.updated', {
+            invoiceId: item.invoiceId,
+            itemId: item.id,
+        });
+
         return updated;
     }
 
@@ -210,6 +224,11 @@ export class ItemsService {
                 itemId: item.id,
                 details: `${actor.name} a supprimé ${item.name}`,
             },
+        });
+
+        this.realtime.broadcast('item.deleted', {
+            invoiceId: item.invoiceId,
+            itemId: item.id,
         });
 
         return {

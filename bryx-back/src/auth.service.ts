@@ -135,6 +135,14 @@ export class AuthService {
     }
 
     private getSecret() {
-        return process.env.BRYX_AUTH_SECRET || 'bryx-dev-secret-change-me';
+        const secret = process.env.BRYX_AUTH_SECRET;
+
+        if (secret) return secret;
+
+        if (process.env.NODE_ENV === 'production') {
+            throw new Error('BRYX_AUTH_SECRET est obligatoire en production');
+        }
+
+        return 'bryx-dev-secret-change-me';
     }
 }

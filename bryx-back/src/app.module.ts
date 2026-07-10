@@ -27,6 +27,7 @@ import { ActivityLogsService } from './activity-logs.service';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { RealtimeService } from './realtime.service';
 
 @Module({
   imports: [],
@@ -55,6 +56,7 @@ import { AuthService } from './auth.service';
     RecapService,
     ActivityLogsService,
     AuthService,
+    RealtimeService,
     {
       provide: APP_GUARD,
       useClass: BryxAuthGuard,
