@@ -1089,6 +1089,10 @@ document.addEventListener("click", (event) => {
   if (menu && !menu.contains(event.target)) {
     closeServerContextMenu();
   }
+
+  if (!event.target.closest(".action-menu")) {
+    closeAllActionMenus();
+  }
 });
 
 document.addEventListener("keydown", (event) => {
@@ -1096,6 +1100,7 @@ document.addEventListener("keydown", (event) => {
     closeConfirmModal();
     closeServiceHistory();
     closeServerContextMenu();
+    closeAllActionMenus();
     closeAllInlineForms();
   }
 });
@@ -1149,8 +1154,69 @@ function contextAddTable() {
 
 function closeAllInlineForms() {
   document
-    .querySelectorAll(".server-create-table.active, .invoice-create-inline.active, .server-keep-create.active")
+    .querySelectorAll(".server-create-table.active, .invoice-create-inline.active, .server-keep-create.active, .table-move-inline.active")
     .forEach((el) => el.classList.remove("active"));
+}
+
+function getActionMenuHtml(menuId, items) {
+  const visibleItems = items.filter(Boolean);
+  if (!visibleItems.length) return "";
+
+  return `
+    <div class="action-menu">
+      <button
+        type="button"
+        class="icon-action"
+        title="Actions"
+        aria-label="Actions"
+        onclick="toggleActionMenu('${menuId}', event)"
+      >...</button>
+      <div id="${menuId}" class="action-menu-panel">
+        ${visibleItems
+      .map((item) => {
+        return `
+          <button type="button" class="${item.danger ? "danger" : ""}" onclick="${item.onclick}; closeAllActionMenus();">
+            ${escapeHtml(item.label)}
+          </button>
+        `;
+      })
+      .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function toggleActionMenu(menuId, event) {
+  event?.stopPropagation();
+  const menu = document.getElementById(menuId);
+  if (!menu) return;
+
+  const wasOpen = menu.classList.contains("active");
+  closeAllActionMenus();
+
+  if (!wasOpen) {
+    menu.classList.add("active");
+  }
+}
+
+function closeAllActionMenus() {
+  document
+    .querySelectorAll(".action-menu-panel.active")
+    .forEach((menu) => menu.classList.remove("active"));
+}
+
+function toggleTableMoveForm(tableId) {
+  closeAllActionMenus();
+  const form = document.getElementById(`move-table-form-${tableId}`);
+  if (!form) return;
+
+  const shouldOpen = !form.classList.contains("active");
+  closeAllInlineForms();
+
+  if (shouldOpen) {
+    form.classList.add("active");
+    document.getElementById(`move-table-server-${tableId}`)?.focus();
+  }
 }
 
 function showCreateTableForm(serverId) {
@@ -1919,6 +1985,13 @@ async function renderServicePage(options = {}) {
 
   const currentUserBar = document.getElementById("currentUserBar");
   if (currentUserBar) {
+    const userMenu = getActionMenuHtml("user-actions-menu", [
+      canOpenServiceHistory()
+        ? { label: "Historique", onclick: "openServiceHistory()" }
+        : null,
+      { label: "Deconnexion", onclick: "logout()" },
+    ]);
+
     currentUserBar.innerHTML = `
       <div class="current-user-bar">
         <span>
@@ -1928,17 +2001,9 @@ async function renderServicePage(options = {}) {
           ${escapeHtml(user.role)}
           ${typeof permissionLabelForCurrentUser === "function" ? `• ${escapeHtml(permissionLabelForCurrentUser())}` : ""}
         </span>
-        <button type="button" class="small secondary" onclick="logout()">Déconnexion</button>
+        ${userMenu}
       </div>
     `;
-    if (canOpenServiceHistory()) {
-      currentUserBar
-        .querySelector(".current-user-bar span")
-        ?.insertAdjacentHTML(
-          "afterend",
-          `<button type="button" class="small secondary" onclick="openServiceHistory()">Historique</button>`
-        );
-    }
   }
 
   grid.innerHTML = "";
@@ -1994,6 +2059,11 @@ async function renderServicePage(options = {}) {
 
     const paymentStats = getServerPaymentStats(server.id);
     const activeFilter = getActiveFilter(server.id);
+    const serverActionMenu = getActionMenuHtml(`server-actions-menu-${server.id}`, [
+      canCreateInvoice() && canActHere
+        ? { label: "Facture volante", onclick: `addFloatingInvoice(${server.id})` }
+        : null,
+    ]);
 
     box.innerHTML = `
       <div class="server-header">
@@ -2011,15 +2081,11 @@ async function renderServicePage(options = {}) {
         </div>
 
         <div class="server-actions">
-          ${canCreateInvoice() && canActHere
-        ? `<button type="button" class="small" onclick="addFloatingInvoice(${server.id})">+ Facture volante</button>`
-        : ""
-      }
-
           ${canOpenTable() && canActHere
-        ? `<button type="button" class="small secondary" onclick="showCreateTableForm(${server.id})">Ouvrir table</button>`
+        ? `<button type="button" class="small" onclick="showCreateTableForm(${server.id})">Ouvrir table</button>`
         : ""
       }
+          ${serverActionMenu}
         </div>
       </div>
 
@@ -2291,7 +2357,7 @@ function renderTablesForServer(serverId, serverTables) {
     const moveTableHtml =
       canMoveTable()
         ? `
-          <div class="attach-floating">
+          <div id="move-table-form-${table.id}" class="attach-floating table-move-inline">
             <select id="move-table-server-${table.id}">
               <option value="">Transférer table vers...</option>
               ${getServerOptionsHtml(table.responsibleUserId)}
@@ -2303,6 +2369,14 @@ function renderTablesForServer(serverId, serverTables) {
           </div>
         `
         : "";
+    const tableActionMenu = getActionMenuHtml(`table-actions-menu-${table.id}`, [
+      canMoveTable()
+        ? { label: "Transferer table", onclick: `toggleTableMoveForm(${table.id})` }
+        : null,
+      canCloseTable()
+        ? { label: "Fermer table", onclick: `askDeleteTable(${table.id})`, danger: true }
+        : null,
+    ]);
 
     card.innerHTML = `
       <div class="table-card-header">
@@ -2318,11 +2392,7 @@ function renderTablesForServer(serverId, serverTables) {
         ? `<button type="button" class="small" onclick="showCreateInvoiceForm(${table.id})">+ Facture</button>`
         : ""
       }
-
-          ${canCloseTable()
-        ? `<button type="button" class="danger small" onclick="askDeleteTable(${table.id})">Fermer</button>`
-        : ""
-      }
+          ${tableActionMenu}
         </div>
       </div>
 

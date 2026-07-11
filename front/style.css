@@ -1386,8 +1386,65 @@ body.server-keep-mode .left-board {
 .table-actions {
   display: flex;
   gap: 7px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  align-items: center;
+}
+
+.action-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.icon-action {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: none;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.action-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1200;
+  min-width: 190px;
+  display: none;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+}
+
+.action-menu-panel.active {
+  display: grid;
+  gap: 5px;
+}
+
+.action-menu-panel button {
+  width: 100%;
+  padding: 8px 9px;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.action-menu-panel button:hover {
+  background: var(--surface-soft);
+}
+
+.action-menu-panel button.danger {
+  color: var(--danger);
 }
 
 .server-filters {
@@ -1743,6 +1800,14 @@ body.server-keep-mode .left-board {
   background: var(--surface-soft);
   border: 1px dashed var(--primary);
   border-radius: 10px;
+}
+
+.table-move-inline {
+  display: none;
+}
+
+.table-move-inline.active {
+  display: grid;
 }
 
 .locked-banner {
@@ -2674,6 +2739,7 @@ button:disabled:hover {
   .login-card,
   .admin-card,
   .admin-panel,
+  .action-menu-panel,
   .server-keep-card,
   .server-keep-table-card,
   .server-keep-detail,
@@ -2696,12 +2762,18 @@ button:disabled:hover {
   .server-keep-logout,
   .server-keep-back,
   .server-keep-qty button,
+  .icon-action,
+  .action-menu-panel button,
   .item-row,
   .server-phone-item-row,
   .history-row {
     background: var(--surface-soft);
     color: var(--text);
     border-color: var(--border);
+  }
+
+  .action-menu-panel button.danger {
+    color: var(--button-danger-bg);
   }
 
   .server-keep-card.muted,
