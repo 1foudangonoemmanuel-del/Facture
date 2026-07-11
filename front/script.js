@@ -3917,11 +3917,11 @@ function renderServerKeepPayment(invoice, locked, canAct) {
   if (!canSetPayment() || !canAct) return "";
 
   return `
-    <section class="server-keep-payment">
-      <div class="server-keep-payment-head">
+    <details class="server-keep-payment">
+      <summary class="server-keep-payment-toggle">
         <strong>Encaissement</strong>
         <span>Reste ${formatMoney(getInvoiceRemaining(invoice))}</span>
-      </div>
+      </summary>
 
       <div class="server-keep-payment-summary">
         <span>CB ${formatMoney(getInvoiceCardPaid(invoice))}</span>
@@ -3961,7 +3961,7 @@ function renderServerKeepPayment(invoice, locked, canAct) {
       : ""
     }
       </div>
-    </section>
+    </details>
   `;
 }
 

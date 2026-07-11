@@ -1347,12 +1347,15 @@ body.server-keep-mode .left-board {
 }
 
 .server-keep-payment {
-  display: grid;
-  gap: 9px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #f8fafc;
   padding: 10px;
+}
+
+.server-keep-payment[open] {
+  display: grid;
+  gap: 9px;
 }
 
 .server-keep-manual {
@@ -1371,7 +1374,7 @@ body.server-keep-mode .left-board {
   margin-top: 8px;
 }
 
-.server-keep-payment-head,
+.server-keep-payment-toggle,
 .server-keep-payment-summary,
 .server-keep-payment-actions {
   display: flex;
@@ -1381,7 +1384,30 @@ body.server-keep-mode .left-board {
   flex-wrap: wrap;
 }
 
-.server-keep-payment-head span,
+.server-keep-payment-toggle {
+  cursor: pointer;
+  list-style: none;
+}
+
+.server-keep-payment-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.server-keep-payment-toggle::after {
+  content: "Ouvrir";
+  color: var(--button-text);
+  background: var(--button-bg);
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.server-keep-payment[open] .server-keep-payment-toggle::after {
+  content: "Masquer";
+}
+
+.server-keep-payment-toggle span,
 .server-keep-payment-summary span {
   color: var(--muted);
   font-size: 12px;
