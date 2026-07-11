@@ -161,7 +161,7 @@ textarea:focus {
 .split-workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: minmax(0, 65fr) minmax(360px, 35fr);
   gap: 14px;
   min-height: 0;
 }
@@ -205,7 +205,8 @@ textarea:focus {
 }
 
 .service-grid.grid-1 .server-box {
-  flex-basis: min(50%, 650px);
+  flex-basis: 100%;
+  max-width: none;
 }
 
 /* SERVER PHONE EXPERIENCE */
@@ -744,7 +745,7 @@ body.caisse-sheet-mode .service-page {
 }
 
 body.caisse-sheet-mode .split-workspace {
-  grid-template-columns: minmax(0, 1fr) 440px;
+  grid-template-columns: minmax(0, 65fr) minmax(360px, 35fr);
   gap: 10px;
 }
 
@@ -753,6 +754,10 @@ body.caisse-sheet-mode .service-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   align-content: start;
+}
+
+body.caisse-sheet-mode .service-grid.grid-1 {
+  grid-template-columns: 1fr;
 }
 
 body.caisse-sheet-mode .server-box {
