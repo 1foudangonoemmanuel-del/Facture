@@ -924,6 +924,10 @@ function getProductCategories() {
   return ["all", ...categories];
 }
 
+function getProductCategory(product) {
+  return product.category || "Sans categorie";
+}
+
 async function quickAddProductToInvoice(invoiceId, productId) {
   const invoice = invoices.find((inv) => inv.id === invoiceId);
   const product = products.find((item) => item.id === productId);
@@ -3801,7 +3805,6 @@ function renderServerKeepInvoiceCard(invoice) {
 function renderServerKeepDetail(user, viewedServer, invoice) {
   const locked = isInvoiceLocked(invoice);
   const canAct = canActOnInvoice(invoice);
-  const productsToShow = products.slice(0, 18);
 
   return `
     <article class="server-keep-detail">
@@ -3822,43 +3825,91 @@ function renderServerKeepDetail(user, viewedServer, invoice) {
     }
         </div>
 
-        ${!locked && canAddItem() && canAct
-      ? `<section class="server-keep-add">
-            <input
-              id="item-name-${invoice.id}"
-              list="products-list-${invoice.id}"
-              placeholder="Rechercher un produit"
-              oninput="fillProductPrice(${invoice.id})"
-            />
-            ${renderProductsDatalist(invoice.id)}
-            <input
-              id="item-price-${invoice.id}"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="Prix"
-              ${canOverrideInvoiceItemPrice() ? "" : "hidden disabled"}
-            />
-            <button type="button" onclick="addItem(${invoice.id})">Ajouter</button>
-          </section>
-
-          <section class="server-keep-products">
-            ${productsToShow.map((product) => {
-        return `
-                <button type="button" onclick="quickAddProductToInvoice(${invoice.id}, ${product.id})">
-                  <strong>${escapeHtml(product.name)}</strong>
-                  <span>${formatMoney(product.price)}</span>
-                </button>
-              `;
-      }).join("")}
-          </section>`
+        <div class="server-keep-side">
+          ${!locked && canAddItem() && canAct
+      ? renderServerKeepProductPicker(invoice.id)
       : locked
         ? `<div class="server-keep-empty compact">Facture reglee : commande verrouillee.</div>`
         : ""
     }
-        ${renderServerKeepPayment(invoice, locked, canAct)}
+          ${renderServerKeepPayment(invoice, locked, canAct)}
+        </div>
       </section>
     </article>
+  `;
+}
+
+function renderServerKeepProductPicker(invoiceId) {
+  if (!products.length) {
+    return `<div class="server-keep-empty compact">Aucun produit catalogue.</div>`;
+  }
+
+  const activeCategory = getServerPhoneCategory(invoiceId);
+  const categories = ["all", ...products
+    .map((product) => getProductCategory(product))
+    .filter((category, index, list) => list.indexOf(category) === index)];
+  const visibleProducts = products.filter((product) => {
+    if (activeCategory === "all") return true;
+    return getProductCategory(product) === activeCategory;
+  });
+
+  return `
+    <section class="server-keep-picker">
+      <div class="server-keep-category-tabs">
+        ${categories
+      .map((category) => {
+        const active = category === activeCategory;
+        const label = category === "all" ? "Tous" : category;
+
+        return `
+          <button
+            type="button"
+            class="server-keep-category ${active ? "active" : ""}"
+            onclick="setServerPhoneCategory(${invoiceId}, '${escapeJsString(category)}')"
+          >
+            ${escapeHtml(label)}
+          </button>
+        `;
+      })
+      .join("")}
+      </div>
+
+      <div class="server-keep-products">
+        ${visibleProducts.length
+      ? visibleProducts.map((product) => {
+        return `
+              <button type="button" onclick="quickAddProductToInvoice(${invoiceId}, ${product.id})">
+                <strong>${escapeHtml(product.name)}</strong>
+                <span>${formatMoney(product.price)}</span>
+              </button>
+            `;
+      }).join("")
+      : `<div class="server-keep-empty compact">Aucun article dans cette categorie.</div>`
+    }
+      </div>
+
+      <details class="server-keep-manual">
+        <summary>Article libre</summary>
+        <div class="server-keep-add">
+          <input
+            id="item-name-${invoiceId}"
+            list="products-list-${invoiceId}"
+            placeholder="Nom de l'article"
+            oninput="fillProductPrice(${invoiceId})"
+          />
+          ${renderProductsDatalist(invoiceId)}
+          <input
+            id="item-price-${invoiceId}"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="Prix"
+            ${canOverrideInvoiceItemPrice() ? "" : "hidden disabled"}
+          />
+          <button type="button" onclick="addItem(${invoiceId})">Ajouter</button>
+        </div>
+      </details>
+    </section>
   `;
 }
 
