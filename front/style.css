@@ -1697,6 +1697,9 @@ body.server-keep-mode .left-board {
 .detail-total-box {
   text-align: right;
   white-space: nowrap;
+  display: grid;
+  justify-items: end;
+  gap: 5px;
 }
 
 .detail-total-box strong {
@@ -1738,9 +1741,10 @@ body.server-keep-mode .left-board {
 
 .payment-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 7px;
   margin-top: 8px;
+  align-items: center;
 }
 
 .article-form {
@@ -1789,6 +1793,10 @@ body.server-keep-mode .left-board {
 .item-total {
   font-weight: bold;
   text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .attach-floating {
@@ -1806,7 +1814,12 @@ body.server-keep-mode .left-board {
   display: none;
 }
 
-.table-move-inline.active {
+.invoice-side-action {
+  display: none;
+}
+
+.table-move-inline.active,
+.invoice-side-action.active {
   display: grid;
 }
 

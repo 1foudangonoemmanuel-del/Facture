@@ -1154,7 +1154,7 @@ function contextAddTable() {
 
 function closeAllInlineForms() {
   document
-    .querySelectorAll(".server-create-table.active, .invoice-create-inline.active, .server-keep-create.active, .table-move-inline.active")
+    .querySelectorAll(".server-create-table.active, .invoice-create-inline.active, .server-keep-create.active, .table-move-inline.active, .invoice-side-action.active")
     .forEach((el) => el.classList.remove("active"));
 }
 
@@ -1216,6 +1216,20 @@ function toggleTableMoveForm(tableId) {
   if (shouldOpen) {
     form.classList.add("active");
     document.getElementById(`move-table-server-${tableId}`)?.focus();
+  }
+}
+
+function toggleInvoiceSideAction(actionId) {
+  closeAllActionMenus();
+  const form = document.getElementById(actionId);
+  if (!form) return;
+
+  const shouldOpen = !form.classList.contains("active");
+  closeAllInlineForms();
+
+  if (shouldOpen) {
+    form.classList.add("active");
+    form.querySelector("select, input, button")?.focus();
   }
 }
 
@@ -2498,7 +2512,7 @@ function renderInvoiceDetailPanel() {
   const attachHtml =
     invoice.tableId === null && possibleTables.length && !locked && canAttachFloatingInvoiceToTable() && canAct
       ? `
-        <div class="attach-floating">
+        <div id="invoice-attach-action-${invoice.id}" class="attach-floating invoice-side-action">
           <select id="attach-table-${invoice.id}">
             <option value="">Ajouter à une table...</option>
             ${possibleTables
@@ -2513,7 +2527,7 @@ function renderInvoiceDetailPanel() {
   const moveInvoiceTableHtml =
     !locked && canAct
       ? `
-        <div class="attach-floating">
+        <div id="invoice-move-table-action-${invoice.id}" class="attach-floating invoice-side-action">
           <select id="move-invoice-table-${invoice.id}">
             <option value="">Déplacer facture vers...</option>
             <option value="floating" ${invoice.tableId === null ? "disabled" : ""}>Facture volante</option>
@@ -2530,7 +2544,7 @@ function renderInvoiceDetailPanel() {
   const moveInvoiceServerHtml =
     !locked && canMoveInvoice()
       ? `
-        <div class="attach-floating">
+        <div id="invoice-move-server-action-${invoice.id}" class="attach-floating invoice-side-action">
           <select id="move-invoice-server-${invoice.id}">
             <option value="">Transférer facture vers serveur...</option>
             ${getServerOptionsHtml(invoice.responsibleUserId)}
@@ -2542,6 +2556,31 @@ function renderInvoiceDetailPanel() {
         </div>
       `
       : "";
+  const invoiceActionMenu = getActionMenuHtml(`invoice-actions-menu-${invoice.id}`, [
+    attachHtml
+      ? { label: "Ajouter a une table", onclick: `toggleInvoiceSideAction('invoice-attach-action-${invoice.id}')` }
+      : null,
+    moveInvoiceTableHtml
+      ? { label: "Deplacer facture", onclick: `toggleInvoiceSideAction('invoice-move-table-action-${invoice.id}')` }
+      : null,
+    moveInvoiceServerHtml
+      ? { label: "Transferer serveur", onclick: `toggleInvoiceSideAction('invoice-move-server-action-${invoice.id}')` }
+      : null,
+    !locked && canCancelInvoice()
+      ? { label: "Annuler facture", onclick: `askDeleteInvoice(${invoice.id})`, danger: true }
+      : null,
+  ]);
+  const paymentActionMenu = getActionMenuHtml(`payment-actions-menu-${invoice.id}`, [
+    canSetFullCardPayment() && canAct
+      ? { label: "Tout CB", onclick: `markInvoicePaidByCard(${invoice.id})` }
+      : null,
+    canSetFullCashPayment() && canAct
+      ? { label: "Tout especes", onclick: `markInvoicePaidByCash(${invoice.id})` }
+      : null,
+    canResetPayment()
+      ? { label: "Reset reglement", onclick: `resetInvoicePayment(${invoice.id})` }
+      : null,
+  ]);
 
   panel.innerHTML = `
     <div class="detail-header">
@@ -2563,6 +2602,7 @@ function renderInvoiceDetailPanel() {
       <div class="detail-total-box">
         <strong>${formatMoney(getInvoiceTotal(invoice))}</strong>
         <span class="payment-status ${getPaymentClass(invoice)}">${getPaymentStatusLabel(invoice)}</span>
+        ${invoiceActionMenu}
       </div>
     </div>
 
@@ -2614,27 +2654,6 @@ function renderInvoiceDetailPanel() {
       : ""
     }
 
-        ${canSetFullCardPayment() && canAct
-      ? `<button type="button" class="small secondary" onclick="markInvoicePaidByCard(${invoice.id})" ${locked ? "disabled" : ""}>
-                Tout CB
-              </button>`
-      : ""
-    }
-
-        ${canSetFullCashPayment() && canAct
-      ? `<button type="button" class="small secondary" onclick="markInvoicePaidByCash(${invoice.id})" ${locked ? "disabled" : ""}>
-                Tout espèces
-              </button>`
-      : ""
-    }
-
-        ${canResetPayment()
-      ? `<button type="button" class="small secondary" onclick="resetInvoicePayment(${invoice.id})" ${locked ? "disabled" : ""}>
-                Reset
-              </button>`
-      : ""
-    }
-
         ${canValidatePayment()
       ? `<button type="button" class="small" onclick="validateInvoicePaid(${invoice.id})" ${locked ? "disabled" : ""}>
                 Clôturer réglée
@@ -2643,6 +2662,7 @@ function renderInvoiceDetailPanel() {
                 Clôture réservée
               </button>`
     }
+        ${!locked ? paymentActionMenu : ""}
       </div>
     </div>
 
@@ -2681,16 +2701,6 @@ function renderInvoiceDetailPanel() {
       </div>
     </div>
 
-    ${canCancelInvoice()
-      ? `<div class="detail-section">
-            <h3>Actions sensibles</h3>
-            <button type="button" class="danger" onclick="askDeleteInvoice(${invoice.id})" ${locked ? "disabled" : ""}>
-              Annuler facture
-            </button>
-          </div>`
-      : ""
-    }
-
   `;
 }
 
@@ -2707,6 +2717,11 @@ function renderItemsHtml(invoice) {
   return items
     .map((item) => {
       const total = Number(item.quantity) * Number(item.unitPrice);
+      const itemActionMenu = getActionMenuHtml(`item-actions-menu-${item.id}`, [
+        !locked && canDeleteItem() && canAct
+          ? { label: "Supprimer article", onclick: `deleteItem(${invoice.id}, ${item.id})`, danger: true }
+          : null,
+      ]);
 
       return `
         <div class="item-row">
@@ -2733,10 +2748,7 @@ function renderItemsHtml(invoice) {
 
           <div class="item-total">
             ${formatMoney(total)}
-            ${!locked && canDeleteItem() && canAct
-          ? `<button type="button" class="danger small" onclick="deleteItem(${invoice.id}, ${item.id})">x</button>`
-          : ""
-        }
+            ${itemActionMenu}
           </div>
         </div>
       `;
