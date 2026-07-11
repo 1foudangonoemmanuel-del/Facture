@@ -18,7 +18,7 @@ export class RecapService {
                     not: 'CANCELLED',
                 },
                 createdAt: {
-                    gte: start,
+                    ...(start ? { gt: start } : {}),
                     lt: end,
                 },
             },
@@ -42,7 +42,7 @@ export class RecapService {
                     not: 'CANCELLED',
                 },
                 createdAt: {
-                    gte: start,
+                    ...(start ? { gt: start } : {}),
                     lt: end,
                 },
             },
@@ -54,7 +54,7 @@ export class RecapService {
                             not: 'CANCELLED',
                         },
                         createdAt: {
-                            gte: start,
+                            ...(start ? { gt: start } : {}),
                             lt: end,
                         },
                     },
@@ -329,18 +329,7 @@ export class RecapService {
         return (sorted[middle - 1] + sorted[middle]) / 2;
     }
 
-    private getTodayBounds() {
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-
-        const end = new Date(start);
-        end.setDate(end.getDate() + 1);
-
-        return { start, end };
-    }
-
     private async getActiveDayBounds() {
-        const bounds = this.getTodayBounds();
         const lastClose = await this.prisma.activityLog.findFirst({
             where: {
                 action: 'CLOSE_DAY',
@@ -353,10 +342,9 @@ export class RecapService {
             },
         });
 
-        if (lastClose && lastClose.createdAt > bounds.start) {
-            bounds.start = lastClose.createdAt;
-        }
-
-        return bounds;
+        return {
+            start: lastClose?.createdAt || null,
+            end: new Date(),
+        };
     }
 }
