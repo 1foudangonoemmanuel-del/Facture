@@ -11,6 +11,80 @@ export class RecapService {
 
     async getTodayRecap() {
         const { start, end } = await this.getActiveDayBounds();
+        return this.getRecapForBounds(start, end, {
+            id: 'active',
+            status: 'ACTIVE',
+            label: 'Journee active',
+            start,
+            end,
+        });
+    }
+
+    async listDays() {
+        const closes = await this.getCloseLogs('desc');
+        const chronologicalCloses = closes.slice().reverse();
+        const previousCloseById = new Map<number, Date | null>();
+
+        chronologicalCloses.forEach((close, index) => {
+            previousCloseById.set(
+                close.id,
+                index > 0 ? chronologicalCloses[index - 1].createdAt : null,
+            );
+        });
+
+        return {
+            active: {
+                id: 'active',
+                status: 'ACTIVE',
+                label: 'Journee active',
+                start: closes[0]?.createdAt || null,
+                end: null,
+            },
+            closed: closes.map((close) => ({
+                id: close.id,
+                status: 'CLOSED',
+                label: `Journee cloturee ${this.formatDayLabel(close.createdAt)}`,
+                start: previousCloseById.get(close.id) || null,
+                end: close.createdAt,
+                closedAt: close.createdAt,
+                closedBy: close.actorUser,
+                details: close.details,
+            })),
+        };
+    }
+
+    async getClosedDay(closeId: number) {
+        if (!Number.isFinite(closeId)) {
+            throw new BadRequestException('Journee introuvable');
+        }
+
+        const closes = await this.getCloseLogs('asc');
+        const closeIndex = closes.findIndex((close) => close.id === closeId);
+
+        if (closeIndex === -1) {
+            throw new BadRequestException('Journee introuvable');
+        }
+
+        const close = closes[closeIndex];
+        const previousClose = closeIndex > 0 ? closes[closeIndex - 1] : null;
+
+        return this.getRecapForBounds(previousClose?.createdAt || null, close.createdAt, {
+            id: close.id,
+            status: 'CLOSED',
+            label: `Journee cloturee ${this.formatDayLabel(close.createdAt)}`,
+            start: previousClose?.createdAt || null,
+            end: close.createdAt,
+            closedAt: close.createdAt,
+            closedBy: close.actorUser,
+            details: close.details,
+        });
+    }
+
+    private async getRecapForBounds(
+        start: Date | null,
+        end: Date,
+        period: Record<string, unknown>,
+    ) {
 
         const invoices = await this.prisma.invoice.findMany({
             where: {
@@ -187,6 +261,7 @@ export class RecapService {
                 deferredInvoiceCount: invoices.filter((invoice) => invoice.deferredPayment)
                     .length,
             },
+            period,
             byServer,
             invoices: invoiceTotals.map((row) => ({
                 id: row.invoice.id,
@@ -346,5 +421,35 @@ export class RecapService {
             start: lastClose?.createdAt || null,
             end: new Date(),
         };
+    }
+
+    private getCloseLogs(order: 'asc' | 'desc') {
+        return this.prisma.activityLog.findMany({
+            where: {
+                action: 'CLOSE_DAY',
+            },
+            orderBy: {
+                createdAt: order,
+            },
+            include: {
+                actorUser: {
+                    select: {
+                        id: true,
+                        name: true,
+                        role: true,
+                    },
+                },
+            },
+        });
+    }
+
+    private formatDayLabel(date: Date) {
+        return new Intl.DateTimeFormat('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        }).format(date);
     }
 }

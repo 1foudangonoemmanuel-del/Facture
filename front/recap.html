@@ -22,6 +22,15 @@
   </header>
   <div id="currentUserBar"></div>
   <main class="recap-page">
+    <section class="recap-period-bar">
+      <label>
+        <span>Journee consultee</span>
+        <select id="recapDaySelect" onchange="renderRecapPage()">
+          <option value="active">Journee active</option>
+        </select>
+      </label>
+      <div id="recapPeriodInfo" class="recap-period-info"></div>
+    </section>
 
     <section class="summary">
       <div class="summary-card">
@@ -116,7 +125,7 @@
   <script src="config.js?v=20260709-theme"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="auth.js?v=20260709-theme"></script>
-  <script src="script.js?v=20260710-quartiles"></script>
+  <script src="script.js?v=20260711-day-history"></script>
   <script>
     requireRole(["CAISSE", "MANAGER", "ADMIN"]);
     injectRoleNav();

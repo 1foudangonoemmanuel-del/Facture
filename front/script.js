@@ -2775,6 +2775,66 @@ function renderServiceHistory() {
 
 /* -------------------- RECAP PAGE -------------------- */
 
+let recapDaysCache = null;
+
+async function loadRecapDays() {
+  recapDaysCache = await apiGet("/recap/days");
+  return recapDaysCache;
+}
+
+async function fetchSelectedRecap() {
+  const select = document.getElementById("recapDaySelect");
+  const selected = select?.value || "active";
+
+  if (selected === "active") {
+    return apiGet("/recap/today");
+  }
+
+  return apiGet(`/recap/days/${encodeURIComponent(selected)}`);
+}
+
+function renderRecapDaySelect(days) {
+  const select = document.getElementById("recapDaySelect");
+  if (!select || !days) return;
+
+  const current = select.value || "active";
+  const closed = days.closed || [];
+
+  select.innerHTML = [
+    `<option value="active">${escapeHtml(days.active?.label || "Journee active")}</option>`,
+    ...closed.map((day) => {
+      const totalLabel = formatMoneyFromDetails(day.details);
+      const label = totalLabel ? `${day.label} - ${totalLabel}` : day.label;
+      return `<option value="${day.id}">${escapeHtml(label)}</option>`;
+    }),
+  ].join("");
+
+  const hasCurrent = Array.from(select.options).some((option) => option.value === current);
+  select.value = hasCurrent ? current : "active";
+}
+
+function formatMoneyFromDetails(details) {
+  const match = String(details || "").match(/total\s+([0-9]+(?:[.,][0-9]+)?)/i);
+  if (!match) return "";
+  return formatMoney(Number(match[1].replace(",", ".")));
+}
+
+function renderRecapPeriodInfo(period) {
+  const info = document.getElementById("recapPeriodInfo");
+  if (!info) return;
+
+  if (!period) {
+    info.textContent = "";
+    return;
+  }
+
+  const start = period.start ? formatDateTime(period.start) : "debut historique";
+  const end = period.end || period.closedAt ? formatDateTime(period.end || period.closedAt) : "maintenant";
+  const closedBy = period.closedBy?.name ? ` - cloturee par ${period.closedBy.name}` : "";
+
+  info.textContent = `${period.label || "Journee"} : ${start} -> ${end}${closedBy}`;
+}
+
 async function renderRecapPage() {
   const dayTotal = document.getElementById("dayTotal");
   if (!dayTotal) return;
@@ -2783,7 +2843,10 @@ async function renderRecapPage() {
   if (!user) return;
 
   try {
-    const recap = await apiGet("/recap/today");
+    const days = await loadRecapDays();
+    renderRecapDaySelect(days);
+
+    const recap = await fetchSelectedRecap();
 
     const currentUserBar = document.getElementById("currentUserBar");
     if (currentUserBar) {
@@ -2801,6 +2864,7 @@ async function renderRecapPage() {
     }
 
     const summary = recap.summary;
+    renderRecapPeriodInfo(recap.period);
     const ticketAverage =
       summary.invoiceCount > 0 ? summary.totalFacture / summary.invoiceCount : 0;
 
@@ -2958,8 +3022,12 @@ function renderServerDetailPdf(recap) {
 /* -------------------- RECAP ACTIONS -------------------- */
 
 async function buildRecapMessage() {
-  const recap = await apiGet("/recap/today");
+  const recap = await fetchSelectedRecap();
   const s = recap.summary;
+  const periodLine =
+    recap.period?.start || recap.period?.end
+      ? `${recap.period.start ? formatDateTime(recap.period.start) : "debut historique"} -> ${recap.period.end ? formatDateTime(recap.period.end) : "maintenant"}`
+      : "";
 
   const lines = [
     "RÉCAP BRYX",
@@ -2981,6 +3049,10 @@ async function buildRecapMessage() {
       return `- ${server.name} : ${formatMoney(server.total)} | CB ${formatMoney(server.card)} | Espèces ${formatMoney(server.cash)} | Reste ${formatMoney(server.remaining)}`;
     }),
   ];
+
+  if (recap.period?.label || periodLine) {
+    lines.splice(1, 0, recap.period?.label || "", periodLine);
+  }
 
   return lines.join("\n");
 }
@@ -3037,6 +3109,9 @@ async function closeToday() {
 
   try {
     const result = await apiPost("/recap/close-today", {});
+    const select = document.getElementById("recapDaySelect");
+    if (select) select.value = "active";
+    recapDaysCache = null;
     showToast(`Journee cloturee. Total ${formatMoney(result.summary?.totalFacture || 0)}.`);
     await renderRecapPage();
   } catch (error) {

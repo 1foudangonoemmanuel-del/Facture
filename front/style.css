@@ -1763,6 +1763,35 @@ body.server-keep-mode .left-board {
   margin: auto;
 }
 
+.recap-period-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 18px;
+}
+
+.recap-period-bar label {
+  display: grid;
+  gap: 6px;
+  min-width: min(360px, 100%);
+}
+
+.recap-period-bar span,
+.recap-period-info {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.recap-period-info {
+  text-align: right;
+}
+
 .summary,
 .recap-payment-grid {
   display: grid;
@@ -2066,6 +2095,15 @@ body.server-keep-mode .left-board {
   .summary,
   .recap-payment-grid {
     grid-template-columns: 1fr;
+  }
+
+  .recap-period-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recap-period-info {
+    text-align: left;
   }
 }
 
