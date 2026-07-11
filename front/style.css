@@ -1303,6 +1303,16 @@ body.server-keep-mode .left-board {
   border-color: var(--button-bg);
 }
 
+.server-keep-search {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+  color: var(--text);
+  font-weight: 800;
+}
+
 .server-keep-add {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

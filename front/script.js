@@ -916,6 +916,56 @@ function setServerPhoneCategory(invoiceId, category) {
   renderServerPhonePageFromState();
 }
 
+function getServerPhoneProductSearch(invoiceId) {
+  return localStorage.getItem(`bryx_server_phone_search_${invoiceId}`) || "";
+}
+
+function setServerPhoneProductSearch(invoiceId, value) {
+  localStorage.setItem(`bryx_server_phone_search_${invoiceId}`, value || "");
+}
+
+function getProductSearchIndex(product) {
+  return [
+    normalizeText(product.name),
+    phoneticProductKey(product.name),
+    normalizeText(getProductCategory(product)),
+  ].join(" ");
+}
+
+function productMatchesSearchIndex(searchIndex, query) {
+  const clean = normalizeText(query);
+  const phonetic = phoneticProductKey(query);
+
+  if (!clean) return true;
+
+  return searchIndex.includes(clean) || Boolean(phonetic && searchIndex.includes(phonetic));
+}
+
+function productMatchesServerPhoneSearch(product, query) {
+  return productMatchesSearchIndex(getProductSearchIndex(product), query);
+}
+
+function filterServerKeepProducts(invoiceId, query) {
+  setServerPhoneProductSearch(invoiceId, query);
+
+  const picker = document.getElementById(`server-keep-picker-${invoiceId}`);
+  if (!picker) return;
+
+  const buttons = Array.from(picker.querySelectorAll(".server-keep-products button[data-search]"));
+  const empty = picker.querySelector("[data-server-keep-search-empty]");
+  let visibleCount = 0;
+
+  buttons.forEach((button) => {
+    const visible = productMatchesSearchIndex(button.dataset.search || "", query);
+    button.hidden = !visible;
+    if (visible) visibleCount += 1;
+  });
+
+  if (empty) {
+    empty.hidden = visibleCount > 0;
+  }
+}
+
 function getProductCategories() {
   const categories = products
     .map((product) => product.category || "Sans catégorie")
@@ -3845,16 +3895,28 @@ function renderServerKeepProductPicker(invoiceId) {
   }
 
   const activeCategory = getServerPhoneCategory(invoiceId);
+  const searchQuery = getServerPhoneProductSearch(invoiceId);
   const categories = ["all", ...products
     .map((product) => getProductCategory(product))
     .filter((category, index, list) => list.indexOf(category) === index)];
-  const visibleProducts = products.filter((product) => {
-    if (activeCategory === "all") return true;
-    return getProductCategory(product) === activeCategory;
+  const categoryProducts = products.filter((product) => {
+    return activeCategory === "all" || getProductCategory(product) === activeCategory;
   });
+  const visibleProductCount = categoryProducts.filter((product) => {
+    return productMatchesServerPhoneSearch(product, searchQuery);
+  }).length;
 
   return `
-    <section class="server-keep-picker">
+    <section id="server-keep-picker-${invoiceId}" class="server-keep-picker">
+      <input
+        class="server-keep-search"
+        type="search"
+        value="${escapeHtml(searchQuery)}"
+        placeholder="Rechercher un article"
+        autocomplete="off"
+        oninput="filterServerKeepProducts(${invoiceId}, this.value)"
+      />
+
       <div class="server-keep-category-tabs">
         ${categories
       .map((category) => {
@@ -3875,17 +3937,29 @@ function renderServerKeepProductPicker(invoiceId) {
       </div>
 
       <div class="server-keep-products">
-        ${visibleProducts.length
-      ? visibleProducts.map((product) => {
-        return `
-              <button type="button" onclick="quickAddProductToInvoice(${invoiceId}, ${product.id})">
+        ${categoryProducts.map((product) => {
+          const searchIndex = getProductSearchIndex(product);
+          const matchesSearch = productMatchesSearchIndex(searchIndex, searchQuery);
+
+          return `
+              <button
+                type="button"
+                data-search="${escapeHtml(searchIndex)}"
+                onclick="quickAddProductToInvoice(${invoiceId}, ${product.id})"
+                ${matchesSearch ? "" : "hidden"}
+              >
                 <strong>${escapeHtml(product.name)}</strong>
                 <span>${formatMoney(product.price)}</span>
               </button>
             `;
-      }).join("")
-      : `<div class="server-keep-empty compact">Aucun article dans cette categorie.</div>`
-    }
+        }).join("")}
+        <div
+          class="server-keep-empty compact"
+          data-server-keep-search-empty
+          ${visibleProductCount ? "hidden" : ""}
+        >
+          Aucun article correspondant.
+        </div>
       </div>
 
       <details class="server-keep-manual">
