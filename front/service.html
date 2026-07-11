@@ -7,7 +7,7 @@
 
   <title>Service - BRYX</title>
 
-  <link rel="stylesheet" href="style.css?v=20260711-service-65-35" />
+  <link rel="stylesheet" href="style.css?v=20260711-server-views" />
 </head>
 
 <body>
@@ -24,6 +24,7 @@
 
     <section class="split-workspace">
       <section class="left-board">
+        <section id="serviceViewBar" class="service-view-bar"></section>
         <section id="serviceGrid" class="service-grid empty-grid"></section>
       </section>
 
@@ -72,7 +73,7 @@
   <script src="config.js?v=20260709-keep"></script>
   <script src="auth.js?v=20260709-keep"></script>
   <script src="permissions.js?v=20260709-keep"></script>
-  <script src="script.js?v=20260711-action-menus"></script>
+  <script src="script.js?v=20260711-server-views"></script>
   <script>
     requireRole(["SERVER", "CAISSE", "MANAGER", "ADMIN"]);
     injectRoleNav();

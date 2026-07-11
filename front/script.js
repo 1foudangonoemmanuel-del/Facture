@@ -684,6 +684,74 @@ function setServerFilter(serverId, filter) {
   renderServicePage();
 }
 
+function getServiceServerViewMode() {
+  return localStorage.getItem("bryx_service_server_view_mode") || "all";
+}
+
+function getFocusedServiceServerId(visibleServers) {
+  const saved = Number(localStorage.getItem("bryx_service_focused_server"));
+  const savedServer = visibleServers.find((server) => server.id === saved);
+
+  return savedServer?.id || visibleServers[0]?.id || null;
+}
+
+function getDisplayedServiceServers(visibleServers) {
+  if (getServiceServerViewMode() !== "single") return visibleServers;
+
+  const focusedServerId = getFocusedServiceServerId(visibleServers);
+  return visibleServers.filter((server) => server.id === focusedServerId);
+}
+
+function setServiceServerViewMode(mode) {
+  localStorage.setItem("bryx_service_server_view_mode", mode === "single" ? "single" : "all");
+  renderServicePage();
+}
+
+function setFocusedServiceServer(serverId) {
+  localStorage.setItem("bryx_service_server_view_mode", "single");
+  localStorage.setItem("bryx_service_focused_server", String(serverId));
+  renderServicePage();
+}
+
+function renderServiceViewBar(visibleServers) {
+  const bar = document.getElementById("serviceViewBar");
+  if (!bar) return;
+
+  if (!visibleServers.length || currentUser()?.role === "SERVER") {
+    bar.innerHTML = "";
+    return;
+  }
+
+  const mode = getServiceServerViewMode();
+  const focusedServerId = getFocusedServiceServerId(visibleServers);
+
+  bar.innerHTML = `
+    <div class="service-view-tabs">
+      <button
+        type="button"
+        class="service-view-btn ${mode === "all" ? "active" : ""}"
+        onclick="setServiceServerViewMode('all')"
+      >Tous</button>
+      <button
+        type="button"
+        class="service-view-btn ${mode === "single" ? "active" : ""}"
+        onclick="setServiceServerViewMode('single')"
+      >Un serveur</button>
+    </div>
+
+    <label class="service-view-select">
+      <span>Serveur</span>
+      <select onchange="setFocusedServiceServer(Number(this.value))" ${mode === "all" ? "disabled" : ""}>
+        ${visibleServers
+      .map((server) => {
+        return `<option value="${server.id}" ${server.id === focusedServerId ? "selected" : ""}>${escapeHtml(server.name)}</option>`;
+      })
+      .join("")}
+      </select>
+    </label>
+  `;
+}
+
 function getServerPhoneViewId(user, visibleServers) {
   const saved = Number(localStorage.getItem("bryx_server_phone_view"));
   const savedExists = visibleServers.some((server) => server.id === saved);
@@ -1990,6 +2058,7 @@ async function renderServicePage(options = {}) {
   clearSelectedInvoiceIfMissing();
 
   const visibleServers = getVisibleServersForCurrentUser();
+  const displayedServers = getDisplayedServiceServers(visibleServers);
   const serverPhoneMode = user.role === "SERVER";
   const caisseSheetMode = user.role === "CAISSE";
   document.body.classList.toggle("server-phone-mode", serverPhoneMode);
@@ -2022,6 +2091,7 @@ async function renderServicePage(options = {}) {
 
   grid.innerHTML = "";
   grid.className = "service-grid";
+  renderServiceViewBar(visibleServers);
 
   if (!visibleServers.length) {
     grid.classList.add("empty-grid");
@@ -2041,12 +2111,12 @@ async function renderServicePage(options = {}) {
     return;
   }
 
-  if (visibleServers.length === 1) grid.classList.add("grid-1");
-  else if (visibleServers.length === 2) grid.classList.add("grid-2");
-  else if (visibleServers.length <= 4) grid.classList.add("grid-4");
+  if (displayedServers.length === 1) grid.classList.add("grid-1");
+  else if (displayedServers.length === 2) grid.classList.add("grid-2");
+  else if (displayedServers.length <= 4) grid.classList.add("grid-4");
   else grid.classList.add("grid-more");
 
-  visibleServers.forEach((server) => {
+  displayedServers.forEach((server) => {
     const serverTables = tables.filter((table) => getServerIdFromTable(table) === server.id);
 
     const floatingInvoices = invoices.filter((invoice) => {
